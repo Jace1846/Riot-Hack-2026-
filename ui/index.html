@@ -316,6 +316,29 @@
       const { start, best, total, rounds } = result;
       const changed = Object.entries(result.best_settings).filter(([s, v]) => result.start_settings[s] !== v);
       const signed = pct => `${pct > 0 ? "+" : ""}${pct}%`;
+      const [applyMsg, setApplyMsg] = useState("");    // what happened after Apply / Undo
+      const [applied, setApplied] = useState(false);   // shows the Undo button after a successful Apply
+
+      async function applyToProject() {
+        if (!window.confirm("Write these settings into your project's Config/DefaultEngine.ini?\nA backup is made first, and Undo restores it.")) return;
+        try {
+          const data = await postJson("/api/apply", {});
+          setApplied(true);
+          setApplyMsg(`Applied to ${data.ini}. Backup: ${data.backup}. Restart the Unreal editor to see it.`);
+        } catch (e) {
+          setApplyMsg(`Apply failed: ${e.message}`);
+        }
+      }
+
+      async function undoApply() {
+        try {
+          const data = await postJson("/api/undo-apply", {});
+          setApplied(false);
+          setApplyMsg(`Undone: ${data.ini} restored from the backup.`);
+        } catch (e) {
+          setApplyMsg(`Undo failed: ${e.message}`);
+        }
+      }
 
       return (
         <div className="card">
@@ -350,7 +373,14 @@
             : changed.map(([setting, value]) => (
                 <div className="change" key={setting}><code>{setting}</code>: {result.start_settings[setting]} → <b>{value}</b></div>
               ))}
-          <p className="hint">You approve: check the visual trade-offs in the reports, then apply these in Unreal yourself.</p>
+          <p className="hint">You approve: check the visual trade-offs in the reports before applying.</p>
+          {changed.length > 0 && (
+            <div>
+              <button onClick={applyToProject} disabled={applied}>Apply to project</button>{" "}
+              {applied && <button onClick={undoApply}>Undo</button>}
+              {applyMsg && <p className="hint" style={{ wordBreak: "break-all" }}>{applyMsg}</p>}
+            </div>
+          )}
           <p className="hint" title={result.summary_report}>Summary: <code>{result.summary_report}</code></p>
         </div>
       );

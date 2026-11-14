@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT))  # so "controller" can be imported when run from u
 import anthropic  # noqa: E402
 
 from controller.analysis import summarize_csv  # noqa: E402
+from controller.apply import apply_settings, engine_ini, undo_apply  # noqa: E402
 from controller.benchmark import capture_folder, find_newest_csv, run_benchmark  # noqa: E402
 from controller.pipeline import CONFIG, load_config, load_rules, optimize  # noqa: E402
 
@@ -51,7 +52,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "Not found"})
 
     def do_POST(self):
-        routes = {"/api/analyze": self._analyze, "/api/benchmark": self._benchmark, "/api/optimize": self._optimize}
+        routes = {"/api/analyze": self._analyze, "/api/benchmark": self._benchmark, "/api/optimize": self._optimize,
+                  "/api/apply": self._apply, "/api/undo-apply": self._undo_apply}
         if self.path not in routes:
             return self._send_json(404, {"error": "Not found"})
         try:
@@ -92,6 +94,27 @@ class Handler(BaseHTTPRequestHandler):
         OPTIMIZE.update(running=True, lines=[], result=None, error=None)
         threading.Thread(target=run_optimize, args=(body.get("rounds"), config, api_key, goal), daemon=True).start()
         self._send_json(202, {"started": True})
+
+    def _apply(self, body):
+        """Write the last run's winning settings into DefaultEngine.ini (after a backup).
+
+        The settings come from the server's own memory of the last measured run, never from
+        the page, so nothing unmeasured can be written.
+        """
+        result = OPTIMIZE["result"]
+        if OPTIMIZE["running"] or result is None:
+            raise ValueError("Finish an Optimize run first.")
+        changed = {s: v for s, v in result["best_settings"].items() if result["start_settings"].get(s) != v}
+        allowlist, _ = load_rules()
+        ini = engine_ini(load_config())
+        backup = apply_settings(ini, changed, allowlist)
+        self._send_json(200, {"ini": str(ini), "backup": str(backup), "applied": changed})
+
+    def _undo_apply(self, body):
+        """Restore DefaultEngine.ini from the newest FrameOptimizer backup."""
+        ini = engine_ini(load_config())
+        undo_apply(ini)
+        self._send_json(200, {"ini": str(ini)})
 
     def _send_json(self, status, data):
         self._send(status, json.dumps(data).encode(), "application/json")
