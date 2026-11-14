@@ -14,7 +14,7 @@ RECOMMENDATIONS = {
 
 def build_report(experiment, baseline, before, after, comparison, allowlist):
     """Return the report as a Markdown string. before/after are summaries from analysis.summarize_csv()."""
-    lines = [f"# FrameForge report: {experiment['name']}", ""]
+    lines = [f"# FrameOptimizer report: {experiment['name']}", ""]
 
     lines += ["## What changed", ""]
     for setting, new_value in experiment["settings"].items():

@@ -1,8 +1,8 @@
-# FrameForge — Claude Code Instructions
+# FrameOptimizer — Claude Code Instructions
 
 ## 1. Project Overview
 
-**FrameForge** is an AI-powered Unreal Engine 5 framerate optimizer built for DevHacks 2026, Riot Games Track 2: Agentic Development.
+**FrameOptimizer** is an AI-powered Unreal Engine 5 framerate optimizer built for DevHacks 2026, Riot Games Track 2: Agentic Development.
 
 **Goal:** Build an AI agent that identifies performance problems, proposes graphics optimizations, tests them in Unreal, and verifies improvements using real measurements.
 
@@ -92,7 +92,7 @@ Keep the architecture small and understandable.
 
 | Component | Responsibility |
 |---|---|
-| `main.py` | Starts FrameForge and handles commands |
+| `main.py` | Starts FrameOptimizer and handles commands |
 | `agent.py` | Uses AI to select optimization experiments |
 | `benchmark.py` | Validates changes and runs Unreal benchmarks |
 | `analysis.py` | Reads profiling data and compares performance |
@@ -161,7 +161,7 @@ For new development tasks, use this structure:
 
 **What we're doing:** Explain the goal.
 
-**Why it matters:** Explain how it contributes to FrameForge.
+**Why it matters:** Explain how it contributes to FrameOptimizer.
 
 **Files involved:** Identify what needs to change.
 

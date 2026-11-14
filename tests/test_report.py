@@ -56,4 +56,4 @@ def test_report_skips_bottleneck_when_missing():
 def test_save_report_writes_file(tmp_path):
     path = save_report(make_report(), tmp_path / "shadow_02")
     assert path.exists()
-    assert path.read_text(encoding="utf-8").startswith("# FrameForge report: shadow_02")
+    assert path.read_text(encoding="utf-8").startswith("# FrameOptimizer report: shadow_02")

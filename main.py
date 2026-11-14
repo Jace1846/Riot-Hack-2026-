@@ -1,4 +1,4 @@
-"""main.py - FrameForge's front door. Reads the command you typed and runs the pipeline.
+"""main.py - FrameOptimizer's front door. Reads the command you typed and runs the pipeline.
 
 Start reading at: main().
 """
@@ -17,7 +17,7 @@ REPORTS = ROOT / "reports"
 
 USAGE = """Usage:
   py main.py
-      Open the FrameForge window (benchmark, charts, and AI in one place).
+      Open the FrameOptimizer window (benchmark, charts, and AI in one place).
   py main.py propose <baseline.csv>
       Ask the AI to propose one experiment. Writes experiments/<name>.json for you to review.
   py main.py run <experiment.json>

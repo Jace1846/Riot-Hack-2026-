@@ -1,6 +1,6 @@
-"""ui/server.py - tiny local web server for the FrameForge React page.
+"""ui/server.py - tiny local web server for the FrameOptimizer React page.
 
-Run:   py main.py   (or py ui/server.py) - opens the FrameForge window automatically.
+Run:   py main.py   (or py ui/server.py) - opens the FrameOptimizer window automatically.
 
 Only listens on 127.0.0.1 (this computer). The API key you paste in the page is used for
 one request and never saved to disk. Uses only Python's standard library - no Flask etc.
@@ -131,7 +131,7 @@ def latest_capture():
 
 
 def open_window(url):
-    """Open FrameForge in its own Edge app window, or in the default browser if Edge isn't found."""
+    """Open FrameOptimizer in its own Edge app window, or in the default browser if Edge isn't found."""
     for edge in EDGE_PATHS:
         if edge.exists():
             subprocess.Popen([str(edge), f"--app={url}"])
@@ -145,17 +145,17 @@ def start(open_app=True):
     try:
         server = ThreadingHTTPServer((HOST, PORT), Handler)  # bind first, so the page can load immediately
     except OSError:
-        print(f"Port {PORT} is busy - FrameForge is probably already running. Opening its window.")
+        print(f"Port {PORT} is busy - FrameOptimizer is probably already running. Opening its window.")
         if open_app:
             open_window(url)
         return
-    print(f"FrameForge running at {url}  (Ctrl+C to stop)")
+    print(f"FrameOptimizer running at {url}  (Ctrl+C to stop)")
     if open_app:
         open_window(url)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("FrameForge stopped.")
+        print("FrameOptimizer stopped.")
 
 
 if __name__ == "__main__":

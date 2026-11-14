@@ -15,7 +15,7 @@ from controller.benchmark import validate_experiment
 
 MODEL = "claude-opus-5-5"
 
-SYSTEM_PROMPT = """You are FrameForge's optimization agent for an Unreal Engine 5 benchmark scene.
+SYSTEM_PROMPT = """You are FrameOptimizer's optimization agent for an Unreal Engine 5 benchmark scene.
 You propose ONE graphics-settings experiment at a time. The goal is lower frame time while costing as little visual quality as possible.
 
 Rules:

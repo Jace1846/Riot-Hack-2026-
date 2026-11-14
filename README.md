@@ -1,4 +1,4 @@
-# FrameForge
+# FrameOptimizer
 
 An AI-assisted frame-rate optimizer for Unreal Engine 5, built for **DevHacks 2026**, Riot Games Track 2: Agentic Development.
 
@@ -7,7 +7,7 @@ An AI-assisted frame-rate optimizer for Unreal Engine 5, built for **DevHacks 20
 
 ## What it does
 
-Tuning a game's settings for lower-end PCs usually means hours of manual profiling. FrameForge automates that loop:
+Tuning a game's settings for lower-end PCs usually means hours of manual profiling. FrameOptimizer automates that loop:
 
 1. **Measure:** launches a fixed Unreal scene and records frame times with Unreal's CSV profiler, or reads a CSV capture you already have.
 2. **Diagnose:** finds the bottleneck (game thread, render thread, or GPU) and which GPU passes cost the most.
@@ -25,8 +25,8 @@ Settings are passed to Unreal on the command line for each run only, so nothing 
 Requirements: Windows, Python 3.12+, Unreal Engine 5 (for benchmarks), and an Anthropic API key (only for the AI step).
 
 ```
-git clone https://github.com/Jace1846/FrameForge--Riot-Hack-2026-.git FrameForge
-cd FrameForge
+git clone https://github.com/Jace1846/FrameForge--Riot-Hack-2026-.git FrameOptimizer
+cd FrameOptimizer
 py -m pip install -r requirements.txt
 copy config.example.json config.local.json
 ```
@@ -46,13 +46,13 @@ Then edit `config.local.json` with the paths on your PC (use forward slashes):
 
 ## Usage
 
-### The FrameForge window (recommended)
+### The FrameOptimizer window (recommended)
 
 ```
 py main.py
 ```
 
-This opens FrameForge in its own window. Then:
+This opens FrameOptimizer in its own window. Then:
 
 1. **Measure:** choose **Unreal** (click *Benchmark in Unreal*) or **CSV file** (paste the path to a capture).
 2. Read the results: frame-time stats, the CPU vs GPU bottleneck verdict, a frame-time chart, and the cost of each GPU pass.
@@ -83,7 +83,7 @@ The tests need neither Unreal nor an API key. The AI is replaced by a fake clien
 ```
 main.py         Entry point: no arguments opens the window; otherwise runs a command
 controller/     All the Python logic (see code map below)
-ui/             server.py (local web server) + index.html (the FrameForge window)
+ui/             server.py (local web server) + index.html (the FrameOptimizer window)
 experiments/    allowlist.json, baseline.json, one JSON per experiment
 reports/        One folder per experiment with its report.md
 tests/          pytest tests, one file per controller file; fixtures/ holds a hand-made test CSV
@@ -105,7 +105,7 @@ Every controller file starts with the same header: what it does, its loop step, 
 
 ## Honesty notes
 
-- Every number FrameForge shows comes from an Unreal CSV profiler capture that you run or supply. No measurements are invented.
+- Every number FrameOptimizer shows comes from an Unreal CSV profiler capture that you run or supply. No measurements are invented.
 - The test CSV in `tests/fixtures/` is hand-made test input. It is only used by the tests and is never shown as a result.
 - The CPU/GPU bottleneck is an estimate from Unreal's measured thread times; very close calls are labeled "mixed".
 - Lower graphics settings can reduce visual quality. Each report lists the visual trade-off of every changed setting.
