@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FrameForge</title>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f7f9; --card: #ffffff; --text: #16181d; --muted: #5d6573; --border: #dde1e7;
+      --accent: #d13639; --accent-text: #ffffff; --warn-bg: #fff4d6; --warn-text: #7a5300;
+      --error-bg: #fde7e7; --error-text: #9b1c1c; --bar: #d13639; --code-bg: #f0f2f5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111317; --card: #1a1d23; --text: #e8eaee; --muted: #9aa3b2; --border: #2c313a;
+        --accent: #ff5a5f; --accent-text: #111317; --warn-bg: #3a2f10; --warn-text: #ffd27a;
+        --error-bg: #3d1717; --error-text: #ffb3b3; --bar: #ff5a5f; --code-bg: #232730;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+           font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+    h1 { margin: 0; font-size: 26px; letter-spacing: -0.02em; }
+    h1 span { color: var(--accent); }
+    .tagline { color: var(--muted); margin: 4px 0 24px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 20px; margin-bottom: 16px; }
+    .card h2 { margin: 0 0 12px; font-size: 16px; }
+    label { display: block; font-weight: 600; font-size: 13px; margin: 12px 0 4px; }
+    label:first-of-type { margin-top: 0; }
+    input { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--bg); color: var(--text); font: inherit; }
+    .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    button { margin-top: 16px; padding: 10px 18px; border: 0; border-radius: 8px; background: var(--accent);
+             color: var(--accent-text); font: inherit; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .banner { padding: 10px 12px; border-radius: 8px; font-size: 14px; margin-bottom: 12px; }
+    .warn { background: var(--warn-bg); color: var(--warn-text); }
+    .error { background: var(--error-bg); color: var(--error-text); }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 14px; }
+    .stat { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+    .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+    .stat small { color: var(--muted); }
+    .pass { display: grid; grid-template-columns: 150px 1fr 52px; gap: 8px; align-items: center;
+            font-size: 13px; margin: 4px 0; }
+    .pass .track { background: var(--code-bg); border-radius: 4px; height: 10px; }
+    .pass .fill { background: var(--bar); border-radius: 4px; height: 10px; }
+    .pass .ms { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+    code, pre { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+    pre { background: var(--code-bg); padding: 10px 12px; border-radius: 8px; overflow-x: auto; margin: 6px 0 0; }
+    .change { font-size: 15px; margin: 4px 0; }
+    .reason { margin: 10px 0; }
+    ul.tried { margin: 0; padding-left: 18px; }
+    ul.tried li { margin: 3px 0; }
+    .muted { color: var(--muted); }
+    footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 24px; }
+    @media (max-width: 520px) { .pass { grid-template-columns: 110px 1fr 44px; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    function App() {
+      // The key lives only in this React state: never saved to localStorage or disk.
+      const [apiKey, setApiKey] = useState("");
+      const [csvPath, setCsvPath] = useState("tests/fixtures/sample_synthetic.csv");
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState("");
+      const [result, setResult] = useState(null);
+      const [tried, setTried] = useState([]);
+
+      const loadTried = () =>
+        fetch("/api/experiments").then(r => r.json()).then(d => setTried(d.experiments || [])).catch(() => {});
+
+      useEffect(() => { loadTried(); }, []);
+
+      async function propose() {
+        setLoading(true); setError(""); setResult(null);
+        try {
+          const response = await fetch("/api/propose", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ api_key: apiKey, csv_path: csvPath }),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Request failed");
+          setResult(data);
+          loadTried();
+        } catch (e) {
+          setError(e.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      return (
+        <main>
+          <h1>Frame<span>Forge</span></h1>
+          <p className="tagline">The AI suggests. Measurements decide. The developer approves.</p>
+
+          <div className="card">
+            <h2>1. Ask the agent for an experiment</h2>
+            <label htmlFor="key">Anthropic API key</label>
+            <input id="key" type="password" autoComplete="off" placeholder="sk-ant-..."
+                   value={apiKey} onChange={e => setApiKey(e.target.value)} />
+            <div className="hint">Kept in this page's memory only and sent to your local server. Never saved.</div>
+
+            <label htmlFor="csv">Baseline CSV (path inside the project)</label>
+            <input id="csv" value={csvPath} onChange={e => setCsvPath(e.target.value)} />
+
+            <button onClick={propose} disabled={loading}>
+              {loading ? "Asking the agent…" : "Propose experiment"}
+            </button>
+          </div>
+
+          {error && <div className="banner error">{error}</div>}
+          {result && <Result data={result} />}
+
+          <div className="card">
+            <h2>Experiments on file</h2>
+            {tried.length === 0 ? <p className="muted">None yet.</p> : (
+              <ul className="tried">
+                {tried.map(t => (
+                  <li key={t.name}>
+                    <code>{t.name}</code>{" "}
+                    <span className="muted">
+                      {Object.entries(t.settings).map(([s, v]) => `${s}=${v}`).join(", ")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <footer>Runs locally at 127.0.0.1. Benchmarks still run from the terminal on the Unreal machine.</footer>
+        </main>
+      );
+    }
+
+    function Result({ data }) {
+      const { experiment, summary, saved_to, synthetic } = data;
+      const passes = Object.entries(summary.gpu_passes).sort((a, b) => b[1] - a[1]);
+      const biggest = passes.length ? passes[0][1] : 1;
+
+      return (
+        <>
+          <div className="card">
+            <h2>Baseline measurements</h2>
+            {synthetic && <div className="banner warn">⚠ SYNTHETIC TEST DATA. Not real Unreal measurements.</div>}
+            <div className="stats">
+              <div className="stat"><b>{summary.median_ms} ms</b><small>median frame</small></div>
+              <div className="stat"><b>{summary.p95_ms} ms</b><small>p95 frame</small></div>
+              <div className="stat"><b>{summary.max_ms} ms</b><small>worst frame</small></div>
+              <div className="stat"><b>{summary.median_fps}</b><small>median FPS</small></div>
+            </div>
+            {passes.map(([name, ms]) => (
+              <div className="pass" key={name}>
+                <span>{name.replace("GPU/", "")}</span>
+                <div className="track"><div className="fill" style={{ width: `${(ms / biggest) * 100}%` }} /></div>
+                <span className="ms">{ms} ms</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="card">
+            <h2>2. Agent proposal: <code>{experiment.name}</code></h2>
+            {Object.entries(experiment.settings).map(([setting, value]) => (
+              <div className="change" key={setting}><code>{setting}</code> → <b>{value}</b></div>
+            ))}
+            <p className="reason"><b>Why:</b> {experiment.reason}</p>
+            <p className="muted">Passed the allowlist check. Saved to <code>{saved_to}</code>.</p>
+            <h2 style={{ marginTop: 16 }}>3. Review it, then benchmark it</h2>
+            <pre>py main.py run {saved_to}</pre>
+          </div>
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

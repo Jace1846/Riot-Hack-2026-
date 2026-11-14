@@ -42,19 +42,11 @@ def propose_command(baseline_csv):
     """AI suggests: read the baseline CSV, ask Claude for one experiment, save it for human review."""
     allowlist, baseline = _load_rules()
     summary = summarize_csv(baseline_csv)
-    tried = [load_json(p) for p in sorted(EXPERIMENTS.glob("*.json")) if p.name not in ("allowlist.json", "baseline.json")]
+    tried = load_tried_experiments()
 
     print("Asking the AI for an experiment...")
     experiment = propose_experiment(summary, allowlist, baseline, tried)
-
-    # Never overwrite an existing experiment file.
-    path = EXPERIMENTS / f"{experiment['name']}.json"
-    number = 2
-    while path.exists():
-        path = EXPERIMENTS / f"{experiment['name']}_{number}.json"
-        number += 1
-    experiment["name"] = path.stem
-    path.write_text(json.dumps(experiment, indent=2) + "\n")
+    path = save_experiment(experiment)
 
     if summary["synthetic"]:
         print("  [Based on SYNTHETIC DATA]")
@@ -62,6 +54,23 @@ def propose_command(baseline_csv):
     print(f"Reason:   {experiment['reason']}")
     print(f"Saved to: {path}")
     print(f"Review it, then run:  py main.py run {path.relative_to(ROOT)}")
+
+
+def load_tried_experiments():
+    """Every experiment JSON already in experiments/ (so the AI doesn't repeat them)."""
+    return [load_json(p) for p in sorted(EXPERIMENTS.glob("*.json")) if p.name not in ("allowlist.json", "baseline.json")]
+
+
+def save_experiment(experiment):
+    """Write experiments/<name>.json, never overwriting an existing file. Returns the path."""
+    path = EXPERIMENTS / f"{experiment['name']}.json"
+    number = 2
+    while path.exists():
+        path = EXPERIMENTS / f"{experiment['name']}_{number}.json"
+        number += 1
+    experiment["name"] = path.stem
+    path.write_text(json.dumps(experiment, indent=2) + "\n")
+    return path
 
 
 def run_command(experiment_path):
