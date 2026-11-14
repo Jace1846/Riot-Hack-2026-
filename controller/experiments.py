@@ -1,6 +1,14 @@
-"""Load experiments and check them against the allowlist.
+"""
+experiments.py: load experiment files and check them against the allowlist.
+
+Loop step:      2. Validate  (before anything is sent to Unreal)
+Start reading:  validate_experiment()
+Used by:        cli.py (validate command), later runner.py and agent.py
 
 Guardrail: nothing reaches Unreal unless validate_experiment() returns [].
+
+An experiment file looks like:
+    {"id": "shadow_02", "description": "...", "changes": {"sg.ShadowQuality": 2}}
 """
 
 import json
@@ -15,6 +23,10 @@ ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 ALLOWED_KEYS = {"id", "description", "changes"}
 
 
+# ---------------------------------------------------------------------------
+# Loading files
+# ---------------------------------------------------------------------------
+
 def load_json(path):
     """Read a JSON file and return its contents."""
     with open(path, encoding="utf-8") as f:
@@ -25,6 +37,10 @@ def load_allowlist(path=DEFAULT_ALLOWLIST):
     """Return {setting_name: {"min": int, "max": int, ...}}."""
     return load_json(path)
 
+
+# ---------------------------------------------------------------------------
+# Checking an experiment (the guardrail)
+# ---------------------------------------------------------------------------
 
 def validate_experiment(experiment, allowlist):
     """Return a list of problems. An empty list means the experiment is allowed."""
@@ -50,22 +66,35 @@ def validate_experiment(experiment, allowlist):
         return errors
 
     for setting, value in changes.items():
-        rule = allowlist.get(setting)
-        if rule is None:
-            errors.append(f"{setting}: not in the allowlist")
-            continue
-        # bool is a subclass of int in Python, so reject it explicitly.
-        if isinstance(value, bool) or not isinstance(value, int):
-            errors.append(f"{setting}: value must be a whole number, got {value!r}")
-            continue
-        if not rule["min"] <= value <= rule["max"]:
-            errors.append(f"{setting}: {value} is outside {rule['min']}-{rule['max']}")
+        problem = check_change(setting, value, allowlist)
+        if problem:
+            errors.append(problem)
 
     return errors
 
 
+def check_change(setting, value, allowlist):
+    """Check one setting/value pair. Returns an error message, or None if it's fine."""
+    rule = allowlist.get(setting)
+    if rule is None:
+        return f"{setting}: not in the allowlist"
+
+    # bool is a kind of int in Python (True == 1), so reject it explicitly.
+    if isinstance(value, bool) or not isinstance(value, int):
+        return f"{setting}: value must be a whole number, got {value!r}"
+
+    if not rule["min"] <= value <= rule["max"]:
+        return f"{setting}: {value} is outside {rule['min']}-{rule['max']}"
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Turning an experiment into Unreal settings
+# ---------------------------------------------------------------------------
+
 def to_exec_cmds(experiment, allowlist):
-    """Build the -ExecCmds string, e.g. "sg.ShadowQuality 2,r.ScreenPercentage 75".
+    """Build the -ExecCmds text, e.g. "sg.ShadowQuality 2,r.ScreenPercentage 75".
 
     Validates first and raises ValueError if the experiment is not allowed.
     """

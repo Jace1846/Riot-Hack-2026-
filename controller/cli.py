@@ -1,4 +1,13 @@
-"""Reads the command you type, e.g.  py main.py validate experiments/shadow_02.json"""
+"""
+cli.py: read the command you type and call the right function.
+
+Loop step:      none (this is the front door)
+Start reading:  main()
+Called by:      main.py
+
+Example:  py main.py validate experiments/shadow_02.json
+To add a command: write a cmd_<name>(args) function, then register it in main().
+"""
 
 import argparse
 

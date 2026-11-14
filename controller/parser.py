@@ -1,7 +1,12 @@
-"""Read one Unreal CSV profiler file and summarize it.
+"""
+parser.py: turn one Unreal CSV profiler file into a short summary.
 
-Unreal writes one row per frame, one column per stat (100+ columns).
-At the end it may repeat the header row and add a metadata row like:
+Loop step:      3. Measure  (after Unreal has written a CSV)
+Start reading:  parse_csv()
+Used by:        report.py (and later runner.py)
+
+An Unreal CSV has one row per frame and one column per stat (100+ columns).
+At the end it repeats the header row and adds one metadata row like:
     [HasHeaderRowAtEnd],1,[platform],Windows,[config],Development
 """
 
@@ -9,49 +14,30 @@ import csv
 import math
 import statistics
 
-# Column names. Check these against the first REAL capture before trusting them.
+# Column names we look for. Check these against the first REAL capture.
 FRAME_COL = "FrameTime"
 GPU_COL = "GPUTime"
-GPU_PASS_PREFIX = "GPU/"
+GPU_PASS_PREFIX = "GPU/"  # e.g. "GPU/ShadowDepths" = time spent drawing shadows
 
-# If the GPU is busy for at least this share of the frame, call it GPU-bound.
+# If the GPU is busy for at least 90% of the frame, call it GPU-bound.
 GPU_BOUND_RATIO = 0.9
 
 
+# ---------------------------------------------------------------------------
+# Main function
+# ---------------------------------------------------------------------------
+
 def parse_csv(path):
-    """Return a summary dict for one capture file."""
-    with open(path, newline="", encoding="utf-8") as f:
-        rows = list(csv.reader(f))
+    """Read one capture file and return a summary dict."""
+    header, data_rows, metadata = split_csv(path)
 
-    header = rows[0]
-    data_rows = []
-    metadata = {}
-
-    for row in rows[1:]:
-        if not row:
-            continue
-        if row[0].startswith("["):  # metadata row: stop reading data
-            metadata = read_metadata(row)
-            break
-        if row == header:  # repeated header row: data is over
-            continue
-        data_rows.append(row)
-
-    columns = {name: numbers_in_column(header, data_rows, name) for name in header}
-
-    frame_times = columns.get(FRAME_COL, [])
+    frame_times = column_numbers(header, data_rows, FRAME_COL)
+    gpu_times = column_numbers(header, data_rows, GPU_COL)
     if not frame_times:
         raise ValueError(f"{path}: no '{FRAME_COL}' values found")
-    gpu_times = columns.get(GPU_COL, [])
 
     median_frame = statistics.median(frame_times)
     median_gpu = statistics.median(gpu_times) if gpu_times else None
-
-    gpu_passes = {
-        name[len(GPU_PASS_PREFIX):]: statistics.median(values)
-        for name, values in columns.items()
-        if name.startswith(GPU_PASS_PREFIX) and values
-    }
 
     return {
         "file": str(path),
@@ -61,33 +47,76 @@ def parse_csv(path):
         "fps_estimate": 1000 / median_frame,
         "median_gpu_ms": median_gpu,
         "bottleneck": guess_bottleneck(median_frame, median_gpu),
-        "gpu_passes_ms": gpu_passes,
+        "gpu_passes_ms": gpu_pass_medians(header, data_rows),
         "metadata": metadata,
     }
 
 
-def numbers_in_column(header, data_rows, name):
-    """Return the numeric values in one column (looked up by name), skipping blanks."""
+# ---------------------------------------------------------------------------
+# Helpers (each one does a single job for parse_csv)
+# ---------------------------------------------------------------------------
+
+def split_csv(path):
+    """Split the file into: header row, frame rows, metadata dict."""
+    with open(path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+
+    header = rows[0]
+    data_rows = []
+    metadata = {}
+
+    for row in rows[1:]:
+        if not row:                  # empty line: skip it
+            continue
+        if row == header:            # repeated header: not a frame
+            continue
+        if row[0].startswith("["):   # metadata row: the data is over
+            metadata = read_metadata(row)
+            break
+        data_rows.append(row)
+
+    return header, data_rows, metadata
+
+
+def column_numbers(header, data_rows, name):
+    """All numbers in the column called `name`. Blank or text cells are skipped."""
+    if name not in header:
+        return []
     index = header.index(name)
-    values = []
+
+    numbers = []
     for row in data_rows:
         if index >= len(row):
             continue
         try:
-            values.append(float(row[index]))
-        except ValueError:  # blank or text cell
+            numbers.append(float(row[index]))
+        except ValueError:
             continue
-    return values
+    return numbers
+
+
+def gpu_pass_medians(header, data_rows):
+    """Median time of every "GPU/..." column, e.g. {"ShadowDepths": 7.0, ...}."""
+    medians = {}
+    for name in header:
+        if not name.startswith(GPU_PASS_PREFIX):
+            continue
+        numbers = column_numbers(header, data_rows, name)
+        if numbers:
+            short_name = name[len(GPU_PASS_PREFIX):]
+            medians[short_name] = statistics.median(numbers)
+    return medians
 
 
 def percentile(values, pct):
-    """Nearest-rank percentile, e.g. pct=95 -> the value 95% of frames are at or below."""
+    """Nearest-rank percentile. pct=95 gives the value 95% of frames are at or below."""
     ordered = sorted(values)
     rank = math.ceil(pct / 100 * len(ordered))
     return ordered[max(rank - 1, 0)]
 
 
 def guess_bottleneck(median_frame, median_gpu):
+    """GPU-bound if the GPU is busy for most of the frame, otherwise CPU-bound."""
     if median_gpu is None:
         return "unknown"
     if median_gpu >= GPU_BOUND_RATIO * median_frame:
