@@ -1,0 +1,11 @@
+{
+  "name": "baseline",
+  "reason": "Starting point: every approved setting at its highest quality",
+  "settings": {
+    "r.ScreenPercentage": 100,
+    "r.Shadow.MaxResolution": 2048,
+    "r.Shadow.CSM.MaxCascades": 4,
+    "r.PostProcessAAQuality": 4,
+    "r.VolumetricFog": 1
+  }
+}

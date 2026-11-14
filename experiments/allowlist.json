@@ -1,0 +1,22 @@
+{
+  "r.ScreenPercentage": {
+    "values": [100, 85, 70],
+    "quality_impact": "Renders at lower internal resolution, so the image looks softer"
+  },
+  "r.Shadow.MaxResolution": {
+    "values": [2048, 1024, 512],
+    "quality_impact": "Blurrier, more pixelated shadow edges"
+  },
+  "r.Shadow.CSM.MaxCascades": {
+    "values": [4, 3, 2],
+    "quality_impact": "Less shadow detail on distant objects"
+  },
+  "r.PostProcessAAQuality": {
+    "values": [4, 3, 2],
+    "quality_impact": "More jagged or shimmering edges"
+  },
+  "r.VolumetricFog": {
+    "values": [1, 0],
+    "quality_impact": "Removes light shafts and fog volumes"
+  }
+}

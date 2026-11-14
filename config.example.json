@@ -1,0 +1,8 @@
+{
+  "unreal_exe": "C:/Program Files/Epic Games/UE_5.5/Engine/Binaries/Win64/UnrealEditor.exe",
+  "project": "C:/Path/To/YourProject/YourProject.uproject",
+  "map": "/Game/Maps/Benchmark",
+  "resolution": [1920, 1080],
+  "frames": 600,
+  "timeout_seconds": 180
+}

@@ -15,7 +15,7 @@ Tuning a game's settings for lower-end PCs usually means hours of manual profili
 5. **Verify:** deterministic Python code, not the agent, compares median and p95 frame time against the baseline.
 6. **Apply:** the best verified result becomes a reviewable config change, and the baseline is preserved.
 
-**Core rule:** the agent suggests; measurements decide.
+**Core rule:** the agent suggests; measurements decide. 
 
 ## Project layout
 
@@ -56,3 +56,6 @@ _Coming soon._
 
 - All reported numbers come from real profiler captures unless they're explicitly labeled **synthetic/test data**.
 - Lower graphics settings can reduce visual quality. Any trade-offs are listed in each report.
+
+## Response Guidelines
+shorten responses to conserve tokens but still expalin. I have ADHD.

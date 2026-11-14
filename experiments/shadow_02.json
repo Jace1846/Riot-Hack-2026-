@@ -1,0 +1,7 @@
+{
+  "name": "shadow_02",
+  "reason": "Shadow depths are the second-biggest GPU cost; halve the shadow map resolution",
+  "settings": {
+    "r.Shadow.MaxResolution": 1024
+  }
+}
