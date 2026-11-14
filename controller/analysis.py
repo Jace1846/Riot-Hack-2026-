@@ -1,13 +1,17 @@
 """
-parser.py: turn one Unreal CSV profiler file into a short summary.
+analysis.py: turn Unreal CSVs into numbers, then decide if a candidate beat the baseline.
 
-Loop step:      3. Measure  (after Unreal has written a CSV)
-Start reading:  parse_csv()
-Used by:        report.py (and later runner.py)
+Loop steps:     3. Measure (parse_csv)  ->  4. Verify (compare)
+Start reading:  parse_csv(), then compare()
+Used by:        report.py, main.py
 
 An Unreal CSV has one row per frame and one column per stat (100+ columns).
 At the end it repeats the header row and adds one metadata row like:
     [HasHeaderRowAtEnd],1,[platform],Windows,[config],Development
+
+The agent never decides "better". Each config is run 3+ times; we compare the
+median of those runs and only say "improved" if the gain is bigger than the
+run-to-run noise (spread).
 """
 
 import csv
@@ -22,9 +26,11 @@ GPU_PASS_PREFIX = "GPU/"  # e.g. "GPU/ShadowDepths" = time spent drawing shadows
 # If the GPU is busy for at least 90% of the frame, call it GPU-bound.
 GPU_BOUND_RATIO = 0.9
 
+MIN_RUNS = 3
+
 
 # ---------------------------------------------------------------------------
-# Main function
+# Part 1: read one CSV
 # ---------------------------------------------------------------------------
 
 def parse_csv(path):
@@ -51,10 +57,6 @@ def parse_csv(path):
         "metadata": metadata,
     }
 
-
-# ---------------------------------------------------------------------------
-# Helpers (each one does a single job for parse_csv)
-# ---------------------------------------------------------------------------
 
 def split_csv(path):
     """Split the file into: header row, frame rows, metadata dict."""
@@ -132,3 +134,50 @@ def read_metadata(row):
         if key.startswith("[") and key.endswith("]"):
             metadata[key[1:-1]] = row[i + 1]
     return metadata
+
+
+# ---------------------------------------------------------------------------
+# Part 2: compare baseline vs candidate (the verifier)
+# ---------------------------------------------------------------------------
+
+def spread(values):
+    """How much the runs disagree with each other: slowest minus fastest."""
+    return max(values) - min(values)
+
+
+def compare(baseline_ms, candidate_ms, min_runs=MIN_RUNS):
+    """Compare two lists of per-run frame times (ms, lower is better).
+
+    Example: compare([20.1, 20.3, 20.0], [17.9, 18.2, 18.0])
+    Returns a dict with a "verdict" plus every number used to reach it.
+    """
+    if len(baseline_ms) < min_runs or len(candidate_ms) < min_runs:
+        return {
+            "verdict": "not enough runs",
+            "reason": f"need at least {min_runs} runs each, "
+                      f"got {len(baseline_ms)} baseline and {len(candidate_ms)} candidate",
+        }
+
+    base_median = statistics.median(baseline_ms)
+    cand_median = statistics.median(candidate_ms)
+    improvement = base_median - cand_median  # positive = candidate is faster
+    noise = max(spread(baseline_ms), spread(candidate_ms))
+
+    if improvement > noise:
+        verdict = "improved"
+    elif -improvement > noise:
+        verdict = "worse"
+    else:
+        verdict = "no clear change"
+
+    return {
+        "verdict": verdict,
+        "baseline_median_ms": base_median,
+        "candidate_median_ms": cand_median,
+        "improvement_ms": improvement,
+        "improvement_pct": 100 * improvement / base_median,
+        "noise_ms": noise,
+        "baseline_runs_ms": list(baseline_ms),
+        "candidate_runs_ms": list(candidate_ms),
+        "reason": f"median changed by {improvement:+.2f} ms, noise is {noise:.2f} ms",
+    }

@@ -3,7 +3,7 @@ report.py: save the results of one session to a new reports/<run_id>/ folder.
 
 Loop step:      5. Report  (after the verifier has judged each experiment)
 Start reading:  new_run_dir() -> build_results() -> write_report()
-Uses:           verifier.py (compare)
+Uses:           analysis.py (compare)
 
 Writes two files:
     results.json   all the data; the single source of truth
@@ -14,8 +14,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from controller.experiments import PROJECT_ROOT
-from controller.verifier import compare
+from controller.analysis import compare
+from controller.benchmark import PROJECT_ROOT
 
 REPORTS_DIR = PROJECT_ROOT / "reports"
 SCHEMA_VERSION = 1                       # bump if the results.json layout changes

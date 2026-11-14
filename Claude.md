@@ -34,18 +34,19 @@ Manual mode must always work without an API key (AI step is optional; mock mode 
 Python 3.12 + standard library first. Allowed extras: pytest, an LLM SDK, Pillow/numpy only if needed for screenshot comparison. Ask before adding anything else.
 Never commit secrets. API key comes from an environment variable; real paths live in config.local.json (gitignored). config.example.json is the committed template.
 Current state
-Done and tested (14 pytest tests passing):
-main.py → calls controller.cli.main()
-controller/cli.py → argparse with validate, benchmark, compare, suggest (only validate implemented)
-controller/experiments.py → load_allowlist, load_json, validate_experiment (returns list of errors; empty = allowed), to_exec_cmds
+Done and tested (46 pytest tests passing):
+main.py → argparse CLI (only validate command wired up so far)
+controller/benchmark.py → load_allowlist, load_json, validate_experiment (returns list of errors; empty = allowed), to_exec_cmds, run_benchmark (dry_run prints the Unreal command), collect_csv
+controller/analysis.py → parse_csv (Unreal CSV → summary), compare (baseline vs candidate verdict)
+controller/report.py → new_run_dir, build_results, write_report (results.json + report.md)
 experiments/allowlist.json → 7 settings: sg.ShadowQuality, sg.ViewDistanceQuality, sg.PostProcessQuality, sg.GlobalIlluminationQuality, sg.ReflectionQuality, sg.EffectsQuality (0–4), r.ScreenPercentage (50–100)
 experiments/baseline.json (all sg = 3, 100%), experiments/shadow_02.json
 Experiment format: {"id": "shadow_02", "description": "...", "changes": {"sg.ShadowQuality": 2}}
-Empty placeholders: parser.py, verifier.py, runner.py, report.py, agent.py, requirements.txt, config.example.json, unreal/README.md.
+Empty placeholders: agent.py, requirements.txt, unreal/README.md.
 Branches: main (always works, what judges see), dev (work here, merge at checkpoints).
 Project layout
-main.py                 entry point: py main.py <command>
-controller/             cli, experiments, parser, verifier, runner, report, agent
+main.py                 entry point + CLI: py main.py <command>
+controller/             benchmark (validate + run Unreal), analysis (parse CSV + verify), report, agent
 experiments/            allowlist.json, baseline.json, one JSON per experiment
 tests/                  pytest; fixtures/ holds synthetic CSVs
 reports/                run outputs: raw CSVs, results.json, report.md/html
@@ -54,16 +55,16 @@ unreal/                 Unreal project + setup notes (created on desktop)
 Run: py main.py <command> · Test: py -m pytest
 
 Next steps, in order
-Laptop (now): tests/fixtures/sample_synthetic.csv in Unreal CSV profiler format (labeled synthetic) → controller/parser.py → tests/test_parser.py.
+DONE: tests/fixtures/sample_synthetic.csv in Unreal CSV profiler format (labeled synthetic) → controller/analysis.py (parse_csv) → tests/test_analysis.py.
 Output per capture: median frame time (ms), p95 frame time (ms), FPS estimate (1000 / median), median GPU time, frame count, bottleneck guess (GPU-bound if GPUTime ≈ FrameTime).
 Look up columns by header name, never by position. Expect 100+ columns.
 Stop reading data at a row starting with [ or a repeated header row (Unreal appends metadata like [platform],Windows,[config],Development,...). Keep that metadata in the result.
 Skip blank/non-numeric cells.
-Laptop: controller/verifier.py: compare baseline vs candidate across repeated runs; "improved" only if median improvement > run-to-run spread. Deterministic, fully tested.
-Laptop: controller/report.py: write results.json (stable schema, the source for any UI later) + report.md (and a simple self-contained report.html if time).
-Laptop: controller/runner.py with --dry-run that prints the exact Unreal command it would launch; config.example.json for paths.
+DONE: controller/analysis.py compare(): baseline vs candidate across repeated runs; "improved" only if median improvement > run-to-run spread. Deterministic, fully tested.
+DONE: controller/report.py: write results.json (stable schema, the source for any UI later) + report.md (report.html if time).
+DONE: controller/benchmark.py run_benchmark(dry_run=True) prints the exact Unreal command; config.example.json for paths. TODO: wire benchmark/compare commands into main.py.
 Laptop: controller/agent.py with a mock mode. Input: compact baseline summary incl. per-pass GPU/... timings + allowlist. Output JSON: setting, value, hypothesis, reason. Validate before use. Max 3 experiments. Its hypothesis should cite the measured GPU breakdown (e.g. shadows = 35% of GPU time → try shadows).
-Desktop: build the Unreal scene, capture the first REAL CSV, fix parser column names against it.
+Desktop: build the Unreal scene, capture the first REAL CSV, fix column names in analysis.py against it.
 Desktop: real runs → agent loop → write winning config to the Unreal project on a git branch → re-benchmark to confirm.
 Desktop: comparison against exhaustive sweep / presets → final report → video → Devpost.
 Unreal facts to get right

@@ -1,6 +1,6 @@
 import pytest
 
-from controller.experiments import (
+from controller.benchmark import (
     PROJECT_ROOT,
     load_allowlist,
     load_json,
