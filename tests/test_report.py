@@ -46,6 +46,25 @@ def test_real_data_is_labeled_real():
     assert "SYNTHETIC" not in report
 
 
+def test_report_has_bottleneck_section():
+    report = make_report()
+    assert "### CPU vs GPU bottleneck" in report
+    assert "Before: **GPU**. After: **GPU**." in report
+    assert "moved" not in report  # same bottleneck before and after
+
+
+def test_report_notes_when_bottleneck_moves_to_cpu():
+    cpu_after = {**AFTER, "bottleneck": {**BEFORE["bottleneck"], "bound": "render", "label": "Render thread (CPU)"}}
+    report = make_report(after=cpu_after)
+    assert "moved from GPU to Render thread (CPU)" in report
+    assert "will help less" in report
+
+
+def test_report_skips_bottleneck_when_missing():
+    old_before = {key: value for key, value in BEFORE.items() if key != "bottleneck"}
+    assert "CPU vs GPU bottleneck" not in make_report(before=old_before)
+
+
 def test_save_report_writes_file(tmp_path):
     path = save_report(make_report(), tmp_path / "shadow_02")
     assert path.exists()

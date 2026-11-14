@@ -47,6 +47,50 @@ def test_too_few_frames_raises(tmp_path):
         summarize_csv(short)
 
 
+# ---------------------------------------------------------------- bottleneck
+
+def test_synthetic_fixture_is_gpu_bound():
+    bottleneck = summarize_csv(FIXTURE)["bottleneck"]
+
+    assert bottleneck["bound"] == "gpu"
+    assert set(bottleneck["median_ms"]) == {"game", "render", "gpu"}
+    assert bottleneck["frames_limited_pct"]["gpu"] > 50
+    assert round(sum(bottleneck["frames_limited_pct"].values())) == 100
+
+
+def test_cpu_bound_game_thread(tmp_path):
+    cpu = tmp_path / "cpu.csv"
+    cpu.write_text("FrameTime,GameThreadTime,RenderThreadTime,GPUTime\n" + "20.0,19.0,8.0,10.0\n" * 40)
+    bottleneck = summarize_csv(cpu)["bottleneck"]
+
+    assert bottleneck["bound"] == "game"
+    assert bottleneck["frames_limited_pct"]["game"] == 100.0
+
+
+def test_near_tie_is_mixed(tmp_path):
+    tie = tmp_path / "tie.csv"
+    tie.write_text("FrameTime,GameThreadTime,RenderThreadTime,GPUTime\n" + "16.0,5.0,15.0,15.5\n" * 40)
+    assert summarize_csv(tie)["bottleneck"]["bound"] == "mixed"
+
+
+def test_no_thread_columns_gives_no_bottleneck(tmp_path):
+    plain = tmp_path / "plain.csv"
+    plain.write_text("FrameTime\n" + "14.0\n" * 40)
+    summary = summarize_csv(plain)
+
+    assert summary["bottleneck"] is None
+    assert len(summary["timeline"]["frame"]) == 20
+
+
+def test_timeline_is_thinned_but_keeps_the_spike():
+    summary = summarize_csv(FIXTURE)
+    timeline = summary["timeline"]
+
+    assert len(timeline["frame"]) <= 200
+    assert len(timeline["gpu"]) == len(timeline["frame"])
+    assert max(timeline["frame"]) == summary["max_ms"]  # the hitch isn't averaged away
+
+
 # ---------------------------------------------------------------- compare
 
 BASELINE = {"median_ms": 14.0, "p95_ms": 15.0}

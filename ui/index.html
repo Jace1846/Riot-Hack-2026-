@@ -12,12 +12,17 @@
       --bg: #f6f7f9; --card: #ffffff; --text: #16181d; --muted: #5d6573; --border: #dde1e7;
       --accent: #d13639; --accent-text: #ffffff; --warn-bg: #fff4d6; --warn-text: #7a5300;
       --error-bg: #fde7e7; --error-text: #9b1c1c; --bar: #d13639; --code-bg: #f0f2f5;
+      --grid: #e6e9ee;
+      /* Chart series colors (validated colorblind-safe set): one fixed color per engine part. */
+      --s-game: #1baf7a; --s-render: #eb6834; --s-gpu: #2a78d6; --s-frame: #16181d;
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --bg: #111317; --card: #1a1d23; --text: #e8eaee; --muted: #9aa3b2; --border: #2c313a;
         --accent: #ff5a5f; --accent-text: #111317; --warn-bg: #3a2f10; --warn-text: #ffd27a;
         --error-bg: #3d1717; --error-text: #ffb3b3; --bar: #ff5a5f; --code-bg: #232730;
+        --grid: #262a32;
+        --s-game: #199e70; --s-render: #d95926; --s-gpu: #3987e5; --s-frame: #e8eaee;
       }
     }
     * { box-sizing: border-box; }
@@ -30,6 +35,7 @@
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
             padding: 20px; margin-bottom: 16px; }
     .card h2 { margin: 0 0 12px; font-size: 16px; }
+    .card h3 { margin: 18px 0 8px; font-size: 14px; }
     label { display: block; font-weight: 600; font-size: 13px; margin: 12px 0 4px; }
     label:first-of-type { margin-top: 0; }
     input { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--border);
@@ -58,22 +64,84 @@
     ul.tried li { margin: 3px 0; }
     .muted { color: var(--muted); }
     footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 24px; }
-    @media (max-width: 520px) { .pass { grid-template-columns: 110px 1fr 44px; } }
+
+    /* Bottleneck verdict */
+    .verdict { font-size: 20px; font-weight: 700; margin: 0 0 2px; }
+    .verdict-sub { color: var(--muted); margin: 0 0 14px; font-size: 14px; }
+    .thread { display: grid; grid-template-columns: 150px 1fr 120px; gap: 8px; align-items: center;
+              font-size: 13px; margin: 6px 0; }
+    .thread .track { position: relative; background: var(--code-bg); border-radius: 4px; height: 14px; }
+    .thread .fill { border-radius: 4px; height: 14px; }
+    .thread .ms { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+    .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+    .legend .line-key { display: inline-block; width: 16px; height: 2px; margin-right: 6px; vertical-align: 4px; }
+
+    /* Frame-time chart */
+    .chart { position: relative; }
+    .chart svg { display: block; width: 100%; height: auto; touch-action: none; }
+    .chart text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+    .tooltip { position: absolute; top: 4px; pointer-events: none; background: var(--card); border: 1px solid var(--border);
+               border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
+               white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .tooltip b { display: block; margin-bottom: 2px; }
+
+    /* "Who limited each frame" split bar */
+    .split { display: flex; gap: 2px; height: 22px; border-radius: 4px; overflow: hidden; }
+    .split div { height: 100%; }
+    .split div:first-child { border-radius: 4px 0 0 4px; }
+    .split div:last-child { border-radius: 0 4px 4px 0; }
+    details { margin-top: 10px; font-size: 13px; }
+    summary { cursor: pointer; color: var(--muted); }
+    table { border-collapse: collapse; margin-top: 6px; font-variant-numeric: tabular-nums; }
+    th, td { text-align: left; padding: 3px 14px 3px 0; border-bottom: 1px solid var(--border); }
+    @media (max-width: 520px) {
+      .pass { grid-template-columns: 110px 1fr 44px; }
+      .thread { grid-template-columns: 1fr 96px; }
+      .thread .track { grid-column: 1 / -1; grid-row: 2; }
+    }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
+
+    // One fixed color + name per engine part, used by every chart so colors always mean the same thing.
+    const PARTS = [
+      { key: "game",   name: "Game thread (CPU)",   color: "var(--s-game)" },
+      { key: "render", name: "Render thread (CPU)", color: "var(--s-render)" },
+      { key: "gpu",    name: "GPU",                 color: "var(--s-gpu)" },
+    ];
+
+    // Plain-English advice for each kind of bottleneck.
+    const ADVICE = {
+      gpu: "The GPU finishes last. Graphics settings (resolution, shadows, post-processing) should help.",
+      render: "The render thread finishes last: too many draw calls or objects. Lowering pixel-heavy settings won't help much.",
+      game: "Game logic finishes last (AI, physics, Blueprints). Graphics settings won't help much.",
+      mixed: "Two parts are almost tied. Improving only one of them will give a small gain.",
+    };
+
+    async function postJson(url, body) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Request failed");
+      return data;
+    }
 
     function App() {
       // The key lives only in this React state: never saved to localStorage or disk.
       const [apiKey, setApiKey] = useState("");
       const [csvPath, setCsvPath] = useState("tests/fixtures/sample_synthetic.csv");
-      const [loading, setLoading] = useState(false);
+      const [busy, setBusy] = useState("");  // "", "analyze" or "propose"
       const [error, setError] = useState("");
-      const [result, setResult] = useState(null);
+      const [summary, setSummary] = useState(null);
+      const [proposal, setProposal] = useState(null);
       const [tried, setTried] = useState([]);
 
       const loadTried = () =>
@@ -81,22 +149,29 @@
 
       useEffect(() => { loadTried(); }, []);
 
-      async function propose() {
-        setLoading(true); setError(""); setResult(null);
+      async function analyze() {
+        setBusy("analyze"); setError(""); setProposal(null);
         try {
-          const response = await fetch("/api/propose", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ api_key: apiKey, csv_path: csvPath }),
-          });
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.error || "Request failed");
-          setResult(data);
+          const data = await postJson("/api/analyze", { csv_path: csvPath });
+          setSummary(data.summary);
+        } catch (e) {
+          setError(e.message);
+        } finally {
+          setBusy("");
+        }
+      }
+
+      async function propose() {
+        setBusy("propose"); setError(""); setProposal(null);
+        try {
+          const data = await postJson("/api/propose", { api_key: apiKey, csv_path: csvPath });
+          setSummary(data.summary);
+          setProposal(data);
           loadTried();
         } catch (e) {
           setError(e.message);
         } finally {
-          setLoading(false);
+          setBusy("");
         }
       }
 
@@ -106,22 +181,30 @@
           <p className="tagline">The AI suggests. Measurements decide. The developer approves.</p>
 
           <div className="card">
-            <h2>1. Ask the agent for an experiment</h2>
-            <label htmlFor="key">Anthropic API key</label>
-            <input id="key" type="password" autoComplete="off" placeholder="sk-ant-..."
-                   value={apiKey} onChange={e => setApiKey(e.target.value)} />
-            <div className="hint">Kept in this page's memory only and sent to your local server. Never saved.</div>
-
-            <label htmlFor="csv">Baseline CSV (path inside the project)</label>
+            <h2>1. Analyze a capture</h2>
+            <label htmlFor="csv">Unreal CSV profile (path inside the project)</label>
             <input id="csv" value={csvPath} onChange={e => setCsvPath(e.target.value)} />
-
-            <button onClick={propose} disabled={loading}>
-              {loading ? "Asking the agent…" : "Propose experiment"}
+            <div className="hint">No API key needed. Shows the frame times and whether the CPU or GPU is the bottleneck.</div>
+            <button onClick={analyze} disabled={!!busy}>
+              {busy === "analyze" ? "Analyzing…" : "Analyze CSV"}
             </button>
           </div>
 
           {error && <div className="banner error">{error}</div>}
-          {result && <Result data={result} />}
+          {summary && <Measurements summary={summary} />}
+
+          <div className="card">
+            <h2>2. Ask the agent for an experiment</h2>
+            <label htmlFor="key">Anthropic API key</label>
+            <input id="key" type="password" autoComplete="off" placeholder="sk-ant-..."
+                   value={apiKey} onChange={e => setApiKey(e.target.value)} />
+            <div className="hint">Kept in this page's memory only and sent to your local server. Never saved.</div>
+            <button onClick={propose} disabled={!!busy}>
+              {busy === "propose" ? "Asking the agent…" : "Propose experiment"}
+            </button>
+          </div>
+
+          {proposal && <Proposal data={proposal} />}
 
           <div className="card">
             <h2>Experiments on file</h2>
@@ -144,42 +227,218 @@
       );
     }
 
-    function Result({ data }) {
-      const { experiment, summary, saved_to, synthetic } = data;
+    function Measurements({ summary }) {
       const passes = Object.entries(summary.gpu_passes).sort((a, b) => b[1] - a[1]);
       const biggest = passes.length ? passes[0][1] : 1;
 
       return (
         <>
           <div className="card">
-            <h2>Baseline measurements</h2>
-            {synthetic && <div className="banner warn">⚠ SYNTHETIC TEST DATA. Not real Unreal measurements.</div>}
+            <h2>Measurements</h2>
+            {summary.synthetic && <div className="banner warn">⚠ SYNTHETIC TEST DATA. Not real Unreal measurements.</div>}
             <div className="stats">
               <div className="stat"><b>{summary.median_ms} ms</b><small>median frame</small></div>
               <div className="stat"><b>{summary.p95_ms} ms</b><small>p95 frame</small></div>
               <div className="stat"><b>{summary.max_ms} ms</b><small>worst frame</small></div>
               <div className="stat"><b>{summary.median_fps}</b><small>median FPS</small></div>
             </div>
-            {passes.map(([name, ms]) => (
-              <div className="pass" key={name}>
-                <span>{name.replace("GPU/", "")}</span>
-                <div className="track"><div className="fill" style={{ width: `${(ms / biggest) * 100}%` }} /></div>
-                <span className="ms">{ms} ms</span>
-              </div>
-            ))}
+            <p className="muted" style={{ margin: 0 }}>{summary.frames} frames analyzed (warm-up frames skipped).</p>
           </div>
 
-          <div className="card">
-            <h2>2. Agent proposal: <code>{experiment.name}</code></h2>
-            {Object.entries(experiment.settings).map(([setting, value]) => (
-              <div className="change" key={setting}><code>{setting}</code> → <b>{value}</b></div>
-            ))}
-            <p className="reason"><b>Why:</b> {experiment.reason}</p>
-            <p className="muted">Passed the allowlist check. Saved to <code>{saved_to}</code>.</p>
-            <h2 style={{ marginTop: 16 }}>3. Review it, then benchmark it</h2>
-            <pre>py main.py run {saved_to}</pre>
-          </div>
+          {summary.bottleneck
+            ? <Bottleneck bottleneck={summary.bottleneck} frameMs={summary.median_ms} timeline={summary.timeline} />
+            : <div className="card muted">This CSV has no GameThreadTime / RenderThreadTime / GPUTime columns, so the bottleneck can't be measured.</div>}
+
+          {passes.length > 0 && (
+            <div className="card">
+              <h2>GPU passes: where the GPU time goes</h2>
+              {passes.map(([name, ms]) => (
+                <div className="pass" key={name}>
+                  <span>{name.replace("GPU/", "")}</span>
+                  <div className="track"><div className="fill" style={{ width: `${(ms / biggest) * 100}%` }} /></div>
+                  <span className="ms">{ms} ms</span>
+                </div>
+              ))}
+            </div>
+          )}
         </>
+      );
+    }
+
+    // Visual 1 + 3: the verdict, the per-part bars, and the "who limited each frame" split.
+    function Bottleneck({ bottleneck, frameMs, timeline }) {
+      const parts = PARTS.filter(p => p.key in bottleneck.median_ms);
+      const headline = bottleneck.bound === "mixed" ? bottleneck.label
+        : bottleneck.bound === "gpu" ? "GPU-bound" : `CPU-bound: ${bottleneck.label.replace(" (CPU)", "")}`;
+
+      return (
+        <div className="card">
+          <h2>CPU or GPU bottleneck?</h2>
+          <p className="verdict">{headline}</p>
+          <p className="verdict-sub">
+            {ADVICE[bottleneck.bound]} The slowest part takes {bottleneck.share_of_frame_pct}% of the {frameMs} ms median frame.
+          </p>
+
+          {parts.map(p => {
+            const ms = bottleneck.median_ms[p.key];
+            const pct = Math.min(100, (ms / frameMs) * 100);
+            return (
+              <div className="thread" key={p.key}>
+                <span><span className="swatch" style={{ background: p.color }} />{p.name}</span>
+                <div className="track" title={`${p.name}: ${ms} ms median`}>
+                  <div className="fill" style={{ width: `${pct}%`, background: p.color }} />
+                </div>
+                <span className="ms">{ms} ms · {Math.round(pct)}%</span>
+              </div>
+            );
+          })}
+          <p className="hint">Bar length = median time ÷ median frame time. All three run in parallel, so the longest bar sets the frame rate.</p>
+
+          <h3>Frame time over the capture (ms)</h3>
+          <FrameChart timeline={timeline} parts={parts} />
+
+          <h3>Which part was slowest, frame by frame</h3>
+          <div className="split" role="img"
+               aria-label={parts.map(p => `${p.name} ${bottleneck.frames_limited_pct[p.key]}%`).join(", ")}>
+            {parts.filter(p => bottleneck.frames_limited_pct[p.key] > 0).map(p => (
+              <div key={p.key} title={`${p.name}: slowest in ${bottleneck.frames_limited_pct[p.key]}% of frames`}
+                   style={{ width: `${bottleneck.frames_limited_pct[p.key]}%`, background: p.color }} />
+            ))}
+          </div>
+          <div className="legend" style={{ marginTop: 8 }}>
+            {parts.map(p => (
+              <span key={p.key}><span className="swatch" style={{ background: p.color }} />{p.name} <b style={{ color: "var(--text)" }}>{bottleneck.frames_limited_pct[p.key]}%</b></span>
+            ))}
+          </div>
+          <p className="hint">If this bar is split between parts, the bottleneck changes during gameplay. Check the chart above for where.</p>
+
+          <details>
+            <summary>Show as table</summary>
+            <table>
+              <thead><tr><th>Part</th><th>Median ms</th><th>% of frame</th><th>Slowest in % of frames</th></tr></thead>
+              <tbody>
+                {parts.map(p => (
+                  <tr key={p.key}>
+                    <td>{p.name}</td>
+                    <td>{bottleneck.median_ms[p.key]}</td>
+                    <td>{Math.round((bottleneck.median_ms[p.key] / frameMs) * 100)}%</td>
+                    <td>{bottleneck.frames_limited_pct[p.key]}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+          <p className="hint">Estimate from measured thread times. Unreal's GPU timing can overlap other work, so treat close calls with care.</p>
+        </div>
+      );
+    }
+
+    // Visual 2: line chart of frame time + each part, with a hover crosshair and tooltip.
+    function FrameChart({ timeline, parts }) {
+      const [hover, setHover] = useState(null);
+      const svgRef = useRef(null);
+
+      const W = 700, H = 240, left = 36, right = 10, top = 10, bottom = 26;
+      const plotW = W - left - right, plotH = H - top - bottom;
+      const n = timeline.frame.length;
+      const maxValue = Math.max(...timeline.frame, ...parts.flatMap(p => timeline[p.key]));
+      const yMax = Math.ceil(maxValue / 5) * 5;
+      const tickStep = yMax > 40 ? 10 : 5;
+
+      const x = i => left + (n === 1 ? 0 : (i / (n - 1)) * plotW);
+      const y = ms => top + plotH - (ms / yMax) * plotH;
+      const path = values => values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+
+      const ticks = [];
+      for (let t = 0; t <= yMax; t += tickStep) ticks.push(t);
+      const target60 = 1000 / 60;  // 16.7 ms = 60 FPS
+
+      function onMove(event) {
+        const box = svgRef.current.getBoundingClientRect();
+        const svgX = ((event.clientX - box.left) / box.width) * W;
+        const i = Math.round(((svgX - left) / plotW) * (n - 1));
+        setHover(Math.max(0, Math.min(n - 1, i)));
+      }
+
+      const series = [{ key: "frame", name: "Frame time", color: "var(--s-frame)" }, ...parts];
+
+      return (
+        <>
+          <div className="legend">
+            {series.map(s => (
+              <span key={s.key}><span className="line-key" style={{ background: s.color }} />{s.name}</span>
+            ))}
+            <span><span className="line-key" style={{ borderTop: "2px dashed var(--muted)", height: 0 }} />60 FPS (16.7 ms)</span>
+          </div>
+          <div className="chart">
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} onPointerMove={onMove} onPointerLeave={() => setHover(null)}
+                 role="img" aria-label="Line chart of frame time and per-part times across the capture">
+              {ticks.map(t => (
+                <g key={t}>
+                  <line x1={left} x2={W - right} y1={y(t)} y2={y(t)} stroke="var(--grid)" strokeWidth="1" />
+                  <text x={left - 6} y={y(t) + 4} textAnchor="end">{t}</text>
+                </g>
+              ))}
+              <text x={left} y={H - 6}>start</text>
+              <text x={W - right} y={H - 6} textAnchor="end">end of capture</text>
+
+              {target60 <= yMax && (
+                <line x1={left} x2={W - right} y1={y(target60)} y2={y(target60)}
+                      stroke="var(--muted)" strokeWidth="1" strokeDasharray="4 4" />
+              )}
+
+              {parts.map(p => (
+                <path key={p.key} d={path(timeline[p.key])} fill="none" stroke={p.color} strokeWidth="2"
+                      strokeLinejoin="round" strokeLinecap="round" />
+              ))}
+              <path d={path(timeline.frame)} fill="none" stroke="var(--s-frame)" strokeWidth="2"
+                    strokeLinejoin="round" strokeLinecap="round" />
+
+              {hover !== null && (
+                <g>
+                  <line x1={x(hover)} x2={x(hover)} y1={top} y2={top + plotH} stroke="var(--muted)" strokeWidth="1" />
+                  {series.map(s => (
+                    <circle key={s.key} cx={x(hover)} cy={y(timeline[s.key][hover])} r="4"
+                            fill={s.color} stroke="var(--card)" strokeWidth="2" />
+                  ))}
+                </g>
+              )}
+              {/* Invisible rectangle so the whole plot area catches the pointer. */}
+              <rect x={left} y={top} width={plotW} height={plotH} fill="transparent" />
+            </svg>
+
+            {hover !== null && (
+              <div className="tooltip" style={x(hover) > W / 2
+                  ? { right: `${((W - x(hover)) / W) * 100 + 1}%` }
+                  : { left: `${(x(hover) / W) * 100 + 1}%` }}>
+                <b>Frame #{timeline.frame_index[hover]}</b>
+                {series.map(s => (
+                  <div key={s.key}>
+                    <span className="swatch" style={{ background: s.color }} />
+                    {s.name}: {timeline[s.key][hover].toFixed(2)} ms
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="hint">Hover to inspect a frame. The line that sits just under "Frame time" is the bottleneck. Spikes are hitches.</p>
+        </>
+      );
+    }
+
+    function Proposal({ data }) {
+      const { experiment, saved_to } = data;
+      return (
+        <div className="card">
+          <h2>Agent proposal: <code>{experiment.name}</code></h2>
+          {Object.entries(experiment.settings).map(([setting, value]) => (
+            <div className="change" key={setting}><code>{setting}</code> → <b>{value}</b></div>
+          ))}
+          <p className="reason"><b>Why:</b> {experiment.reason}</p>
+          <p className="muted">Passed the allowlist check. Saved to <code>{saved_to}</code>.</p>
+          <h2 style={{ marginTop: 16 }}>3. Review it, then benchmark it</h2>
+          <pre>py main.py run {saved_to}</pre>
+        </div>
       );
     }
 

@@ -50,6 +50,8 @@ def build_report(experiment, baseline, before, after, comparison, allowlist):
                 lines.append(_row(name, old_ms, after["gpu_passes"][name]))
         lines.append("")
 
+    lines += _bottleneck_section(before.get("bottleneck"), after.get("bottleneck"))
+
     verdict = comparison["verdict"]
     lines += [
         f"## Verdict: {verdict}",
@@ -76,6 +78,32 @@ def save_report(text, folder):
 
 
 # ---------------------------------------------------------------- Helpers
+
+def _bottleneck_section(before, after):
+    """Markdown lines comparing the CPU/GPU bottleneck before and after. Empty if either run lacks the data."""
+    if not before or not after:
+        return []
+
+    lines = [
+        "### CPU vs GPU bottleneck",
+        "",
+        f"Before: **{before['label']}**. After: **{after['label']}**.",
+        "",
+        "| Part (median ms) | Before | After | Change |",
+        "|---|---|---|---|",
+    ]
+    for part, old_ms in before["median_ms"].items():
+        if part in after["median_ms"]:
+            lines.append(_row(part, old_ms, after["median_ms"][part]))
+    lines.append("")
+
+    if before["bound"] != after["bound"]:
+        note = f"Note: the bottleneck moved from {before['label']} to {after['label']}."
+        if after["bound"] != "gpu":
+            note += " The GPU is no longer the main limit, so further graphics-setting cuts will help less."
+        lines += [note, ""]
+    return lines
+
 
 def _row(label, before, after):
     """One table row: label | before | after | % change."""

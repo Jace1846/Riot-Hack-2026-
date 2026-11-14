@@ -43,6 +43,17 @@ def test_prompt_contains_measurements_rules_and_history():
     assert "shadow_02: r.Shadow.MaxResolution=1024" in prompt
 
 
+def test_prompt_includes_the_bottleneck():
+    prompt = build_prompt(SUMMARY, ALLOWLIST, BASELINE, TRIED)
+    assert "CPU vs GPU bottleneck" in prompt
+    assert "Verdict: GPU" in prompt
+
+
+def test_prompt_works_without_bottleneck_data():
+    no_threads = {key: value for key, value in SUMMARY.items() if key != "bottleneck"}
+    assert "CPU vs GPU bottleneck" not in build_prompt(no_threads, ALLOWLIST, BASELINE, TRIED)
+
+
 def test_schema_only_allows_approved_setting_names():
     schema = build_schema(ALLOWLIST)
     enum = schema["properties"]["settings"]["items"]["properties"]["setting"]["enum"]

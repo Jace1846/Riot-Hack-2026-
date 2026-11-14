@@ -33,16 +33,22 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "Not found"})
 
     def do_POST(self):
-        if self.path != "/api/propose":
+        if self.path not in ("/api/analyze", "/api/propose"):
             return self._send_json(404, {"error": "Not found"})
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
-            api_key = body.get("api_key", "").strip()
             csv_path = body.get("csv_path", "").strip()
-            if not api_key:
-                raise ValueError("Paste your Anthropic API key first.")
             if not csv_path:
                 raise ValueError("Enter the path to a baseline CSV.")
+
+            # Analyze: just the measurements. No AI, no API key needed.
+            if self.path == "/api/analyze":
+                summary = summarize_csv(ROOT / csv_path)
+                return self._send_json(200, {"summary": summary})
+
+            api_key = body.get("api_key", "").strip()
+            if not api_key:
+                raise ValueError("Paste your Anthropic API key first.")
 
             allowlist, baseline = _load_rules()
             summary = summarize_csv(ROOT / csv_path)

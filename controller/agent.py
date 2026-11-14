@@ -21,6 +21,8 @@ You propose ONE graphics-settings experiment at a time. The goal is lower frame 
 Rules:
 - Only use the approved settings and values listed. Anything else is rejected automatically.
 - Change one setting (two at most), so the measurement clearly shows what caused any difference.
+- Check the CPU/GPU bottleneck first. The approved settings mainly reduce GPU work, so they help most when the scene is GPU-bound.
+  If it is CPU-bound (game or render thread), still propose the most promising setting, but say in "reason" that the gain will likely be small.
 - Target the biggest GPU costs in the measurements first.
 - Do not repeat an experiment that was already tried.
 - Prefer the smallest step down first (for example 2048 -> 1024 before 512).
@@ -72,6 +74,17 @@ def build_prompt(summary, allowlist, baseline, tried):
     ]
     for name, ms in sorted(summary["gpu_passes"].items(), key=lambda item: item[1], reverse=True):
         lines.append(f"- {name}: {ms}")
+
+    bottleneck = summary.get("bottleneck")
+    if bottleneck:
+        lines += [
+            "",
+            "## CPU vs GPU bottleneck (estimated from Unreal's thread times)",
+            f"Verdict: {bottleneck['label']} ({bottleneck['share_of_frame_pct']}% of the median frame)",
+            "Median ms per part: " + ", ".join(f"{part} {ms}" for part, ms in bottleneck["median_ms"].items()),
+            "Slowest part, % of frames: "
+            + ", ".join(f"{part} {pct}%" for part, pct in bottleneck["frames_limited_pct"].items()),
+        ]
 
     lines += ["", "## Current baseline settings"]
     for setting, value in baseline["settings"].items():
