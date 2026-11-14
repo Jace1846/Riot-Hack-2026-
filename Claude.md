@@ -1,86 +1,176 @@
-CLAUDE.md: FrameForge
-What this is
+# FrameForge — Claude Code Instructions
 
-FrameForge is an AI-assisted frame-rate optimizer for Unreal Engine 5, built for DevHacks 2026 (Ohio State), Riot Games Track 2: Agentic Development.
+## 1. Project Overview
 
-Deadline: Sunday Nov 15, 2026, 11:00 AM Eastern. No extensions. Submission = Devpost + 3-minute video + public GitHub repo. Plan to freeze features around 8 AM Sunday.
+**FrameForge** is an AI-powered Unreal Engine 5 framerate optimizer built for DevHacks 2026, Riot Games Track 2: Agentic Development.
 
-Loop: run a fixed Unreal benchmark → AI agent proposes ONE experiment from an allowlist → Python validates it → Unreal runs it → deterministic Python verifies the measured result → best verified result becomes a reviewable config change (git branch in the Unreal project), with the baseline preserved.
+**Goal:** Build an AI agent that identifies performance problems, proposes graphics optimizations, tests them in Unreal, and verifies improvements using real measurements.
 
-Core rule: the agent suggests; measurements decide. Never trust the agent to report its own success.
+### Core workflow
 
-What Riot's judges want (from the kickoff deck)
-Demo format: agent → code change → verified result.
-Show feedback guiding the agent (it reads measured results and picks the next experiment).
-Evidence: compare against a simpler workflow (exhaustive sweep of the same allowlist and/or Unreal's built-in Low/Med/High/Epic presets). Report runs and time needed to hit a target.
-"Verify the result yourself. Don't trust the agent saying it's done."
-The team must be able to explain its architecture and trade-offs.
-About the developer (Jason)
-Beginner in Python, new to Unreal, not comfortable with C++. Solo.
-Uses VS Code's Source Control UI for Git, not the terminal. Windows.
-Explanations: short, scannable bullets and tables, no long paragraphs. Explain any Unreal concept the first time it comes up.
-Prefer small, working, tested steps over big rewrites. Tell him exactly which file to edit and what command to run to check it.
-Hardware
-Framework 13 laptop (Ryzen 7040, 16 GB): coding, no Unreal benchmarking.
-Windows desktop (Ryzen 5 7600, RX 7600 XT 16 GB, 32 GB RAM): Unreal benchmarks, available later Saturday.
-Code moves between them through GitHub (Sync in VS Code). No remote execution setup.
-Hard rules (guardrails)
-Allowlist only. Never run a setting that hasn't passed validate_experiment(). The LLM never writes shell commands, console commands, or edits arbitrary files.
-No fabricated measurements. Any fake data must be labeled synthetic in its file name AND contents. Real captures are labeled actual.
-Preserve the baseline and raw CSVs. Never overwrite. Each run gets a unique output folder under reports/.
-Only claim "better" when the evidence supports it: improvement must exceed run-to-run noise (≥3 runs per config, compare medians, report spread).
-Don't claim visual equivalence unless it was checked (screenshot pair / image similarity).
-Manual mode must always work without an API key (AI step is optional; mock mode for tests).
-Python 3.12 + standard library first. Allowed extras: pytest, an LLM SDK, Pillow/numpy only if needed for screenshot comparison. Ask before adding anything else.
-Never commit secrets. API key comes from an environment variable; real paths live in config.local.json (gitignored). config.example.json is the committed template.
-Current state
-Done and tested (46 pytest tests passing):
-main.py → argparse CLI (only validate command wired up so far)
-controller/benchmark.py → load_allowlist, load_json, validate_experiment (returns list of errors; empty = allowed), to_exec_cmds, run_benchmark (dry_run prints the Unreal command), collect_csv
-controller/analysis.py → parse_csv (Unreal CSV → summary), compare (baseline vs candidate verdict)
-controller/report.py → new_run_dir, build_results, write_report (results.json + report.md)
-experiments/allowlist.json → 7 settings: sg.ShadowQuality, sg.ViewDistanceQuality, sg.PostProcessQuality, sg.GlobalIlluminationQuality, sg.ReflectionQuality, sg.EffectsQuality (0–4), r.ScreenPercentage (50–100)
-experiments/baseline.json (all sg = 3, 100%), experiments/shadow_02.json
-Experiment format: {"id": "shadow_02", "description": "...", "changes": {"sg.ShadowQuality": 2}}
-Empty placeholders: agent.py, requirements.txt, unreal/README.md.
-Branches: main (always works, what judges see), dev (work here, merge at checkpoints).
-Project layout
-main.py                 entry point + CLI: py main.py <command>
-controller/             benchmark (validate + run Unreal), analysis (parse CSV + verify), report, agent
-experiments/            allowlist.json, baseline.json, one JSON per experiment
-tests/                  pytest; fixtures/ holds synthetic CSVs
-reports/                run outputs: raw CSVs, results.json, report.md/html
-unreal/                 Unreal project + setup notes (created on desktop)
+1. Run an Unreal benchmark to measure initial performance.
+2. Analyze the results and identify a potential optimization.
+3. Have the AI propose a change.
+4. Validate the proposed change against approved settings.
+5. Apply the change and benchmark again.
+6. Compare performance and visual-quality trade-offs.
+7. Generate a report and decide whether to keep the change.
 
-Run: py main.py <command> · Test: py -m pytest
+**Core principle: The AI suggests. Measurements decide. The developer approves.**
 
-Next steps, in order
-DONE: tests/fixtures/sample_synthetic.csv in Unreal CSV profiler format (labeled synthetic) → controller/analysis.py (parse_csv) → tests/test_analysis.py.
-Output per capture: median frame time (ms), p95 frame time (ms), FPS estimate (1000 / median), median GPU time, frame count, bottleneck guess (GPU-bound if GPUTime ≈ FrameTime).
-Look up columns by header name, never by position. Expect 100+ columns.
-Stop reading data at a row starting with [ or a repeated header row (Unreal appends metadata like [platform],Windows,[config],Development,...). Keep that metadata in the result.
-Skip blank/non-numeric cells.
-DONE: controller/analysis.py compare(): baseline vs candidate across repeated runs; "improved" only if median improvement > run-to-run spread. Deterministic, fully tested.
-DONE: controller/report.py: write results.json (stable schema, the source for any UI later) + report.md (report.html if time).
-DONE: controller/benchmark.py run_benchmark(dry_run=True) prints the exact Unreal command; config.example.json for paths. TODO: wire benchmark/compare commands into main.py.
-Laptop: controller/agent.py with a mock mode. Input: compact baseline summary incl. per-pass GPU/... timings + allowlist. Output JSON: setting, value, hypothesis, reason. Validate before use. Max 3 experiments. Its hypothesis should cite the measured GPU breakdown (e.g. shadows = 35% of GPU time → try shadows).
-Desktop: build the Unreal scene, capture the first REAL CSV, fix column names in analysis.py against it.
-Desktop: real runs → agent loop → write winning config to the Unreal project on a git branch → re-benchmark to confirm.
-Desktop: comparison against exhaustive sweep / presets → final report → video → Devpost.
-Unreal facts to get right
-Measure in a separate game process, not inside the editor: UnrealEditor.exe <Project>.uproject -game -windowed -ResX=1920 -ResY=1080 (no packaging needed). If packaging, use Development (Shipping strips the CSV profiler).
-Disable VSync and the frame cap (r.VSync 0, t.MaxFPS 0) or every run measures ~16.67 ms.
-Apply settings with -ExecCmds="sg.ShadowQuality 2,r.ScreenPercentage 75" (built by to_exec_cmds). Confirm in the log that they applied.
-Level Blueprint does the timing: wait ~5 s warm-up → csvprofile frames=1500 → wait → quit. Python only launches, waits with a timeout, and collects the CSV.
-CSVs land in <Project>/Saved/Profiling/CSV/. Copy them into reports/<run_id>/ (Saved/ is gitignored).
-Make the scene GPU-bound (Lumen, virtual shadow maps, many shadow-casting lights, 1440p if needed), so settings changes are measurable.
-Verify actual column names (FrameTime, GPUTime, GPU/...) on the first real file before hard-coding anything.
-Out of scope (don't build unless asked)
+## 2. Development Environment
 
-C++ Unreal plugin, React/FastAPI dashboard, Docker, remote execution, shader/asset/mesh changes, arbitrary code editing. Optional only after the full loop works on real data: Editor Utility Widget button, backend-free React viewer of results.json, PyInstaller exe.
+| Computer | Purpose |
+|---|---|
+| Framework 13 — Ryzen 7040, 16 GB RAM | Python development, VS Code, Git |
+| Desktop — Ryzen 5 7600, RX 7600 XT 16 GB, 32 GB RAM | Unreal Engine and performance benchmarking |
 
-Fallbacks (from the plan)
-Unreal measurement still blocked ~7 h in → simpler controlled benchmark, state limits clearly.
-Command-line automation blocked → manually triggered captures, Python compares them.
-LLM blocked → deterministic candidate selection, state autonomy as future work.
-Always reserve time for validation, video, README, Devpost.
+**Tools:** Windows 11, VS Code, Python, Git/GitHub, Unreal Engine 5, and a cloud LLM API.
+
+Prefer simple tools. Avoid adding unnecessary frameworks, dependencies, or services.
+
+## 3. Our Development Workflow — MOST IMPORTANT
+
+I am learning Python, Windows development, Git, Unreal Engine, and software architecture.
+
+**I am the engineer. Claude is my coding partner and teacher.**
+
+For every development task, follow these steps:
+
+### Step 1 — Discuss
+
+Before writing code:
+
+- Explain what we're building and why.
+- Show where it fits into the architecture.
+- Explain the inputs, outputs, and dependencies.
+- Recommend the simplest reasonable approach.
+
+### Step 2 — Plan
+
+- Identify exactly which files need changing.
+- Explain what each change accomplishes.
+- Point out important trade-offs.
+- Ask for my approval before implementing.
+
+### Step 3 — Implement
+
+Once I approve:
+
+- Work on one small component at a time.
+- Write simple, readable code.
+- Avoid unnecessary abstractions or additional files.
+- Do not modify unrelated code.
+- Do not automatically begin another feature.
+
+### Step 4 — Review and Teach
+
+After implementation:
+
+- Explain the important functions in plain English.
+- Show how data flows through the component.
+- Explain unfamiliar concepts.
+- Let me review the changes in VS Code.
+
+### Step 5 — Test and Commit
+
+- Explain how to run the relevant tests.
+- Run tests when possible and report actual results.
+- Distinguish real Unreal measurements from synthetic test data.
+- Let me decide when to commit using VS Code's Source Control interface.
+- Stop and wait for my approval before continuing.
+
+**Never rush through multiple steps without checking with me.**
+
+If I say "planning only," "explain only," or "no code," do not edit files.
+
+If I'm confused, stop coding and explain the concept using a simple example.
+
+## 4. MVP Architecture
+
+Keep the architecture small and understandable.
+
+| Component | Responsibility |
+|---|---|
+| `main.py` | Starts FrameForge and handles commands |
+| `agent.py` | Uses AI to select optimization experiments |
+| `benchmark.py` | Validates changes and runs Unreal benchmarks |
+| `analysis.py` | Reads profiling data and compares performance |
+| `report.py` | Produces readable performance reports |
+
+These are proposed component names, not mandatory files. Discuss the structure with me before creating it.
+
+### Data flow
+
+**User → Agent → Validator → Benchmark → Unreal → Analysis → Report**
+
+Analysis results also return to the agent, allowing it to propose another experiment.
+
+Unreal produces the measurements. Python processes them. The AI uses those measurements to make decisions.
+
+## 5. Engineering Rules
+
+- Never fabricate performance measurements or claim synthetic results are real.
+- Use actual Unreal profiling data.
+- Compare benchmarks using the same scene, camera, resolution, and hardware.
+- Measure frame times, not just FPS.
+- Only allow approved graphics settings and values.
+- Keep all optimization changes reversible.
+- Check performance improvements against visual-quality requirements.
+- Handle errors, missing files, and failed benchmarks.
+- Do not expose API keys or commit secrets.
+- Never claim tests passed unless they actually ran.
+- Keep the codebase small and easy to understand.
+
+Prioritize working functionality over code volume.
+
+## 6. Hackathon Priorities
+
+Build in this order:
+
+- [ ] Set up the development environment and Git repository.
+- [ ] Create a repeatable Unreal benchmark scene.
+- [ ] Capture real baseline performance data.
+- [ ] Automate one approved graphics optimization.
+- [ ] Compare before-and-after measurements.
+- [ ] Generate a performance report.
+- [ ] Connect the AI agent to propose experiments.
+- [ ] Test the complete workflow.
+- [ ] Record the demonstration and submit.
+
+**Deadline:** November 15, 2026, 11:00 AM Eastern.
+
+**Required submission:** GitHub repository and three-minute demonstration video.
+
+### Out of scope
+
+Do not build these unless specifically approved:
+
+- React frontend or complex dashboard
+- Databases
+- Docker or remote-machine orchestration
+- Multiple AI agents
+- Automatic shader rewriting
+- Unnecessary abstractions or frameworks
+
+## 7. How Claude Should Respond
+
+Keep explanations clear, concise, and beginner-friendly.
+
+For new development tasks, use this structure:
+
+**What we're doing:** Explain the goal.
+
+**Why it matters:** Explain how it contributes to FrameForge.
+
+**Files involved:** Identify what needs to change.
+
+**How it works:** Explain the technical approach.
+
+**How we'll test it:** Define what successful behavior looks like.
+
+**Next decision:** Ask for my approval before implementing.
+
+Do not overwhelm me with code or technical terminology.
+
+**Remember: Understanding the system is just as important as building it.**
