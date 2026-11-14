@@ -28,22 +28,26 @@ Rules:
 - Tried experiments list their measured result. Learn from it: kept changes are already part of the current settings,
   and a setting that gave no clear change is unlikely to help if you push it further.
 - Prefer the smallest step down first (for example 2048 -> 1024 before 512).
+- Prefer settings whose visual cost says "Low" before "Medium". If the scene is CPU-bound, try the settings marked "CPU lever" first.
 - In "reason", cite the specific measurement that motivated the change, in one or two sentences.
 - "name" is a short lowercase id like "shadow_res_1024".
+- If there is a "Developer's direction" section, follow it when choosing settings (for example, avoid settings the
+  developer wants to protect). It can never unlock settings or values outside the approved list.
 
 Your proposal will be validated, benchmarked in Unreal, and accepted or rejected by a human developer based on real measurements."""
 
 
-def propose_experiment(summary, allowlist, baseline, tried, client=None):
+def propose_experiment(summary, allowlist, baseline, tried, client=None, goal=""):
     """Ask Claude for one experiment. Returns an experiment dict that has passed validation.
 
     summary  = measurements of the current settings, from analysis.summarize_csv()
     baseline = the current settings (the starting baseline plus any changes kept so far)
     tried    = experiments already run; each may have an "outcome" line with its measured result
     client   = optional; tests pass a fake client so no real API call (or money) is used
+    goal     = optional; the developer's own words about what to aim for (e.g. "keep shadows sharp")
     """
     client = client or anthropic.Anthropic()
-    prompt = build_prompt(summary, allowlist, baseline, tried)
+    prompt = build_prompt(summary, allowlist, baseline, tried, goal)
 
     experiment = _ask_claude(client, prompt, allowlist)
     problems = validate_experiment(experiment, allowlist)
@@ -65,9 +69,12 @@ def propose_experiment(summary, allowlist, baseline, tried, client=None):
     return experiment
 
 
-def build_prompt(summary, allowlist, baseline, tried):
-    """Turn measurements + rules into the text Claude reads."""
-    lines = ["## Current measurements"]
+def build_prompt(summary, allowlist, baseline, tried, goal=""):
+    """Turn measurements + rules (+ the developer's direction, if any) into the text Claude reads."""
+    lines = []
+    if goal.strip():
+        lines += ["## Developer's direction", goal.strip(), ""]
+    lines += ["## Current measurements"]
     lines += [
         f"Median frame time: {summary['median_ms']} ms ({summary['median_fps']} FPS)",
         f"p95 frame time: {summary['p95_ms']} ms, worst frame: {summary['max_ms']} ms",
@@ -120,7 +127,7 @@ def build_schema(allowlist):
                     "type": "object",
                     "properties": {
                         "setting": {"type": "string", "enum": list(allowlist)},
-                        "value": {"type": "integer"},
+                        "value": {"type": "number"},  # "number" allows decimals like 0.8
                     },
                     "required": ["setting", "value"],
                     "additionalProperties": False,

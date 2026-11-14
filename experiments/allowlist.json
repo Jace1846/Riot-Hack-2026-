@@ -18,5 +18,57 @@
   "r.VolumetricFog": {
     "values": [1, 0],
     "quality_impact": "Removes light shafts and fog volumes"
+  },
+  "r.MotionBlurQuality": {
+    "values": [4, 2, 0],
+    "quality_impact": "Low (cosmetic): less or no motion blur; many players turn it off anyway"
+  },
+  "r.LensFlareQuality": {
+    "values": [2, 0],
+    "quality_impact": "Low (cosmetic): removes lens flares around bright lights"
+  },
+  "r.SceneColorFringeQuality": {
+    "values": [1, 0],
+    "quality_impact": "Low (cosmetic): removes chromatic aberration (color fringing at screen edges)"
+  },
+  "r.BloomQuality": {
+    "values": [5, 4, 3],
+    "quality_impact": "Low: glow around bright areas is slightly less smooth"
+  },
+  "r.DepthOfFieldQuality": {
+    "values": [2, 1],
+    "quality_impact": "Low: background/foreground blur is slightly rougher"
+  },
+  "r.SSR.Quality": {
+    "values": [3, 2, 1],
+    "quality_impact": "Medium: screen-space reflections get noisier and less detailed"
+  },
+  "r.VolumetricFog.GridPixelSize": {
+    "values": [16, 32],
+    "quality_impact": "Low: coarser fog and light shafts (fog stays on)"
+  },
+  "r.ShadowQuality": {
+    "values": [5, 4, 3],
+    "quality_impact": "Medium: shadows get softer and less precise"
+  },
+  "r.Lumen.ScreenProbeGather.DownsampleFactor": {
+    "values": [16, 32],
+    "quality_impact": "Medium: Lumen indirect lighting gets blotchier, especially in small details"
+  },
+  "r.Nanite.MaxPixelsPerEdge": {
+    "values": [1, 2],
+    "quality_impact": "Low to medium: Nanite meshes use slightly fewer triangles, fine detail softens"
+  },
+  "r.SkeletalMeshLODBias": {
+    "values": [0, 1],
+    "quality_impact": "Low: characters use one lower level of detail"
+  },
+  "r.ViewDistanceScale": {
+    "values": [1.0, 0.8, 0.6],
+    "quality_impact": "Low to medium (CPU lever): small distant objects stop drawing sooner and may pop in closer"
+  },
+  "foliage.DensityScale": {
+    "values": [1.0, 0.75, 0.5],
+    "quality_impact": "Low at 0.75, medium at 0.5 (CPU lever): sparser grass and plants"
   }
 }

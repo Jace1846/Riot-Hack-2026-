@@ -29,10 +29,11 @@ def load_config():
     return load_json(CONFIG)
 
 
-def optimize(rounds, config, client=None, progress=print, measure=None, reports_folder=None):
+def optimize(rounds, config, client=None, progress=print, measure=None, reports_folder=None, goal=""):
     """Measure, let the AI propose, test, keep what helps, repeat.
 
     rounds   = how many AI experiments to try (the developer picks this).
+    goal     = optional direction from the developer, passed to the AI every round.
     progress = called with a short status line after each step, so the UI can show it.
     measure  = optional; tests pass a fake so Unreal isn't needed. It gets
                (experiment, current_best) and returns a summary from summarize_csv().
@@ -59,7 +60,7 @@ def optimize(rounds, config, client=None, progress=print, measure=None, reports_
     for number in range(1, rounds + 1):
         try:
             progress(f"Round {number}/{rounds}: asking the AI for a change...")
-            experiment = propose_experiment(best_summary, allowlist, best, tried, client=client)
+            experiment = propose_experiment(best_summary, allowlist, best, tried, client=client, goal=goal)
             changes = ", ".join(f"{s}={v}" for s, v in experiment["settings"].items())
 
             progress(f"Round {number}/{rounds}: testing {changes} in Unreal...")
@@ -95,6 +96,7 @@ def optimize(rounds, config, client=None, progress=print, measure=None, reports_
         "total": compare(start_summary, best_summary),
         "rounds": history,
         "stopped_early": stopped_early,
+        "goal": goal.strip(),
     }
     result["summary_report"] = str(save_report(build_summary(result), folder, "summary.md"))
     progress(f"Done. Summary: {result['summary_report']}")

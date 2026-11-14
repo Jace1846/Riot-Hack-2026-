@@ -6,6 +6,7 @@ Only listens on 127.0.0.1 (this computer). The API key you paste in the page is 
 one request and never saved to disk. Uses only Python's standard library - no Flask etc.
 """
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -82,11 +83,14 @@ class Handler(BaseHTTPRequestHandler):
         api_key = str(body.get("api_key", "")).strip()
         if not api_key:
             raise ValueError("Paste your Anthropic API key first.")
+        goal = str(body.get("goal", "")).strip()
+        if len(goal) > 500:
+            raise ValueError("Keep the direction under 500 characters.")
         config = load_config()
         if not UNREAL_LOCK.acquire(blocking=False):
             return self._send_json(409, {"error": "Unreal is already running a benchmark. Wait for it to finish."})
         OPTIMIZE.update(running=True, lines=[], result=None, error=None)
-        threading.Thread(target=run_optimize, args=(body.get("rounds"), config, api_key), daemon=True).start()
+        threading.Thread(target=run_optimize, args=(body.get("rounds"), config, api_key, goal), daemon=True).start()
         self._send_json(202, {"started": True})
 
     def _send_json(self, status, data):
@@ -106,11 +110,11 @@ class Handler(BaseHTTPRequestHandler):
         print(f"{self.command} {self.path} -> {args[1] if len(args) > 1 else ''}")
 
 
-def run_optimize(rounds, config, api_key):
+def run_optimize(rounds, config, api_key, goal=""):
     """Background job: run the loop, collecting progress lines and the final result for the page."""
     try:
         client = anthropic.Anthropic(api_key=api_key)
-        OPTIMIZE["result"] = optimize(rounds, config, client=client, progress=OPTIMIZE["lines"].append)
+        OPTIMIZE["result"] = optimize(rounds, config, client=client, progress=OPTIMIZE["lines"].append, goal=goal)
     except (FileNotFoundError, ValueError, RuntimeError, KeyError) as error:
         OPTIMIZE["error"] = f"Optimize failed: {error}"
     finally:
@@ -132,8 +136,12 @@ def open_window(url):
     """Open FrameOptimizer in its own Edge app window, or in the default browser if Edge isn't found."""
     for edge in EDGE_PATHS:
         if edge.exists():
-            # Narrow window so it fits beside the game.
-            subprocess.Popen([str(edge), f"--app={url}", "--window-size=360,480"])
+            # A separate Edge profile makes Edge start its own copy, which honors --window-size.
+            # (An already-running Edge ignores it, so the window opened big and then shrank.)
+            # Kept in AppData, not the project folder, so OneDrive and Git don't pick it up.
+            profile = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "FrameOptimizer" / "edge-profile"
+            subprocess.Popen([str(edge), f"--app={url}", "--window-size=360,480", f"--user-data-dir={profile}",
+                              "--no-first-run", "--no-default-browser-check"])
             return
     webbrowser.open(url)
 

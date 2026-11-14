@@ -64,9 +64,10 @@ def build_report(experiment, baseline, before, after, comparison, allowlist):
 def build_summary(result):
     """Markdown summary of a whole optimize() run: start vs best, every round, and the settings to apply."""
     start, best = result["start"], result["best"]
-    lines = [
-        "# FrameOptimizer run summary",
-        "",
+    lines = ["# FrameOptimizer run summary", ""]
+    if result.get("goal"):
+        lines += [f"**Developer's direction:** {result['goal']}", ""]
+    lines += [
         f"## Overall: {result['total']['verdict']}",
         "",
         "| Metric | Start | Best | Change |",

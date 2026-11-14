@@ -6,6 +6,19 @@
     "r.Shadow.MaxResolution": 2048,
     "r.Shadow.CSM.MaxCascades": 4,
     "r.PostProcessAAQuality": 4,
-    "r.VolumetricFog": 1
+    "r.VolumetricFog": 1,
+    "r.MotionBlurQuality": 4,
+    "r.LensFlareQuality": 2,
+    "r.SceneColorFringeQuality": 1,
+    "r.BloomQuality": 5,
+    "r.DepthOfFieldQuality": 2,
+    "r.SSR.Quality": 3,
+    "r.VolumetricFog.GridPixelSize": 16,
+    "r.ShadowQuality": 5,
+    "r.Lumen.ScreenProbeGather.DownsampleFactor": 16,
+    "r.Nanite.MaxPixelsPerEdge": 1,
+    "r.SkeletalMeshLODBias": 0,
+    "r.ViewDistanceScale": 1.0,
+    "foliage.DensityScale": 1.0
   }
 }

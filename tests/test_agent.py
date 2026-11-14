@@ -54,6 +54,16 @@ def test_prompt_works_without_bottleneck_data():
     assert "CPU vs GPU bottleneck" not in build_prompt(no_threads, ALLOWLIST, BASELINE, TRIED)
 
 
+def test_developer_direction_reaches_the_prompt():
+    client = FakeClient(GOOD)
+    propose_experiment(SUMMARY, ALLOWLIST, BASELINE, TRIED, client=client, goal="Keep the shadows sharp.")
+    assert "## Developer's direction\nKeep the shadows sharp." in client.prompts[0]
+
+
+def test_no_direction_section_when_goal_is_empty():
+    assert "Developer's direction" not in build_prompt(SUMMARY, ALLOWLIST, BASELINE, TRIED, goal="   ")
+
+
 def test_schema_only_allows_approved_setting_names():
     schema = build_schema(ALLOWLIST)
     enum = schema["properties"]["settings"]["items"]["properties"]["setting"]["enum"]
