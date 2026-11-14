@@ -1,0 +1,28 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets (never commit API keys)
+.env
+config.local.json
+
+# Unreal Engine (huge, regenerated automatically)
+Binaries/
+Intermediate/
+DerivedDataCache/
+Saved/
+Build/
+*.sln
+.vs/
+
+# Packaged builds and the exe
+dist/
+build/
+*.spec
+Packaged/
+
+# OS junk
+.DS_Store
+Thumbs.db
