@@ -1,0 +1,7 @@
+{
+  "name": "shadow_res_1024",
+  "reason": "The scene is GPU-bound (GPU slowest in 98.9% of frames), and GPU/ShadowDepths at 3.31 ms is the largest cost not yet targeted (screen_pct_85 already covered BasePass). Lowering r.Shadow.MaxResolution from 2048 to 1024 is the smallest step down and should cut shadow depth rendering cost.",
+  "settings": {
+    "r.Shadow.MaxResolution": 1024
+  }
+}

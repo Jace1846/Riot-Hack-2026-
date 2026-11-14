@@ -108,6 +108,62 @@ def report_command(before_csv, after_csv, experiment_path):
     _analyze_and_report(experiment, baseline, allowlist, before_csv, after_csv)
 
 
+def optimize(rounds, config, client=None, progress=print, measure=None, reports_folder=REPORTS):
+    """One-click optimize: measure, let the AI propose, test, keep what helps, repeat.
+
+    rounds   = how many AI experiments to try (the developer picks this).
+    progress = called with a short status line after each step, so the UI can show it.
+    measure  = optional; tests pass a fake so Unreal isn't needed. It gets
+               (experiment, current_best) and returns a summary from summarize_csv().
+    Returns the starting numbers, the best settings found, and what happened each round.
+    """
+    if not isinstance(rounds, int) or not 1 <= rounds <= 10:
+        raise ValueError("Rounds must be a whole number from 1 to 10.")
+
+    allowlist, baseline = _load_rules()
+    if measure is None:
+        def measure(experiment, current_best):
+            return summarize_csv(run_benchmark(experiment, current_best, allowlist, config))
+
+    progress("Measuring the baseline in Unreal...")
+    best = baseline
+    best_summary = start_summary = measure(baseline, baseline)
+    tried = []  # experiments from this run, so the AI doesn't repeat itself
+    history = []
+
+    for number in range(1, rounds + 1):
+        progress(f"Round {number}/{rounds}: asking the AI for a change...")
+        experiment = propose_experiment(best_summary, allowlist, best, tried, client=client)
+        tried.append(experiment)
+        changes = ", ".join(f"{s}={v}" for s, v in experiment["settings"].items())
+
+        progress(f"Round {number}/{rounds}: testing {changes} in Unreal...")
+        after = measure(experiment, best)
+        comparison = compare(best_summary, after)
+
+        text = build_report(experiment, best, best_summary, after, comparison, allowlist)
+        report = save_report(text, Path(reports_folder) / f"round{number}_{experiment['name']}")
+
+        # Keep only measured improvements; the next round builds on top of them.
+        kept = comparison["verdict"] == "improved"
+        if kept:
+            best = {"name": "best", "settings": {**best["settings"], **experiment["settings"]}}
+            best_summary = after
+
+        progress(f"Round {number}/{rounds}: {changes} → {comparison['verdict']} "
+                 f"(median {comparison['median_change_pct']:+.1f}%), {'kept' if kept else 'discarded'}")
+        history.append({"round": number, "experiment": experiment, "comparison": comparison,
+                         "kept": kept, "report": str(report)})
+
+    return {
+        "start": start_summary,
+        "best": best_summary,
+        "best_settings": best["settings"],
+        "total": compare(start_summary, best_summary),
+        "rounds": history,
+    }
+
+
 # ---------------------------------------------------------------- Helpers
 
 def _load_rules():
