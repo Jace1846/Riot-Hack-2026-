@@ -1,0 +1,7 @@
+{
+  "name": "screen_pct_85",
+  "reason": "The scene is GPU-bound (GPU is the slowest part in 98.9% of frames, 13.41 ms median), and GPU/BasePass is the largest pass at 3.95 ms. Lowering r.ScreenPercentage from 100 to 85, the smallest allowed step, cuts the pixel count by about 28%. That should reduce BasePass along with the other per-pixel costs in Lights (1.95 ms) and PostProcessing (1.5 ms), at the cost of a slightly softer image.",
+  "settings": {
+    "r.ScreenPercentage": 85
+  }
+}

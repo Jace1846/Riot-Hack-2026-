@@ -134,7 +134,8 @@ def open_window(url):
     """Open FrameOptimizer in its own Edge app window, or in the default browser if Edge isn't found."""
     for edge in EDGE_PATHS:
         if edge.exists():
-            subprocess.Popen([str(edge), f"--app={url}"])
+            # Narrow window so it fits beside the game.
+            subprocess.Popen([str(edge), f"--app={url}", "--window-size=420,820"])
             return
     webbrowser.open(url)
 
