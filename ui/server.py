@@ -133,7 +133,7 @@ def open_window(url):
     for edge in EDGE_PATHS:
         if edge.exists():
             # Narrow window so it fits beside the game.
-            subprocess.Popen([str(edge), f"--app={url}", "--window-size=420,820"])
+            subprocess.Popen([str(edge), f"--app={url}", "--window-size=360,480"])
             return
     webbrowser.open(url)
 

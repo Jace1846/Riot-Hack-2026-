@@ -113,6 +113,10 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
+    // Edge remembers the last window size and ignores the size the server asks for,
+    // so the page sets its own starting size (width, height in pixels).
+    window.resizeTo(360, 480);
+
     // One fixed color + name per engine part, used by every chart so colors always mean the same thing.
     const PARTS = [
       { key: "game",   name: "Game thread (CPU)",   color: "var(--s-game)" },
@@ -272,7 +276,8 @@
 
           {error && <div className="banner error">{error}</div>}
 
-          <div className="card">
+          {/* Optimize always runs in Unreal, so it is only offered on the Unreal tab. */}
+          {source === "unreal" && <div className="card">
             <h2>Optimize</h2>
             <p className="hint" style={{ margin: "0 0 6px" }}>
               Measures the baseline in Unreal. Then, each round, the AI proposes one approved change,
@@ -294,9 +299,9 @@
               <p className="hint">Unreal opens and closes once per run. Leave its window alone.</p>
             )}
             {progress.length > 0 && <pre>{progress.join("\n")}</pre>}
-          </div>
+          </div>}
 
-          {result && <Result result={result} />}
+          {source === "unreal" && result && <Result result={result} />}
           {summary && <Measurements summary={summary} />}
 
           <footer>Runs locally at 127.0.0.1. Nothing in your Unreal project is changed.</footer>
