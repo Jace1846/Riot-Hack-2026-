@@ -94,3 +94,19 @@ def test_find_newest_csv_ignores_old_files(tmp_path):
 def test_capture_folder_is_inside_the_unreal_project():
     folder = capture_folder({"project": "C:/Games/MyGame/MyGame.uproject"})
     assert folder == Path("C:/Games/MyGame/Saved/Profiling/CSV")
+
+
+def test_command_records_gpu_pass_times():
+    assert "r.GPUCsvStatsEnabled 1" in build_command(SHADOW, BASELINE, CONFIG)
+
+
+def test_capture_is_finished_only_when_the_metadata_line_is_written(tmp_path):
+    from controller.benchmark import capture_finished
+
+    csv = tmp_path / "capture.csv"
+    csv.write_text("FrameTime,GPUTime\n16.6,15.0\n16.7,15.1\n")
+    assert not capture_finished(csv)  # Unreal is still writing frames
+
+    csv.write_text("FrameTime,GPUTime\n16.6,15.0\nFrameTime,GPUTime\n[Platform],Windows,[HasHeaderRowAtEnd],1\n")
+    assert capture_finished(csv)
+    assert not capture_finished(tmp_path / "missing.csv")

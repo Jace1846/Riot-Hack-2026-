@@ -25,6 +25,8 @@ Rules:
   If it is CPU-bound (game or render thread), still propose the most promising setting, but say in "reason" that the gain will likely be small.
 - Target the biggest GPU costs in the measurements first.
 - Do not repeat an experiment that was already tried.
+- Tried experiments list their measured result. Learn from it: kept changes are already part of the current settings,
+  and a setting that gave no clear change is unlikely to help if you push it further.
 - Prefer the smallest step down first (for example 2048 -> 1024 before 512).
 - In "reason", cite the specific measurement that motivated the change, in one or two sentences.
 - "name" is a short lowercase id like "shadow_res_1024".
@@ -35,8 +37,9 @@ Your proposal will be validated, benchmarked in Unreal, and accepted or rejected
 def propose_experiment(summary, allowlist, baseline, tried, client=None):
     """Ask Claude for one experiment. Returns an experiment dict that has passed validation.
 
-    summary  = baseline summary from analysis.summarize_csv()
-    tried    = list of experiment dicts already run (so the AI doesn't repeat them)
+    summary  = measurements of the current settings, from analysis.summarize_csv()
+    baseline = the current settings (the starting baseline plus any changes kept so far)
+    tried    = experiments already run; each may have an "outcome" line with its measured result
     client   = optional; tests pass a fake client so no real API call (or money) is used
     """
     client = client or anthropic.Anthropic()
@@ -64,7 +67,7 @@ def propose_experiment(summary, allowlist, baseline, tried, client=None):
 
 def build_prompt(summary, allowlist, baseline, tried):
     """Turn measurements + rules into the text Claude reads."""
-    lines = ["## Baseline measurements"]
+    lines = ["## Current measurements"]
     lines += [
         f"Median frame time: {summary['median_ms']} ms ({summary['median_fps']} FPS)",
         f"p95 frame time: {summary['p95_ms']} ms, worst frame: {summary['max_ms']} ms",
@@ -84,7 +87,7 @@ def build_prompt(summary, allowlist, baseline, tried):
             + ", ".join(f"{part} {pct}%" for part, pct in bottleneck["frames_limited_pct"].items()),
         ]
 
-    lines += ["", "## Current baseline settings"]
+    lines += ["", "## Current settings (these produced the measurements above)"]
     for setting, value in baseline["settings"].items():
         lines.append(f"- {setting} = {value}")
 
@@ -96,7 +99,8 @@ def build_prompt(summary, allowlist, baseline, tried):
     if tried:
         for experiment in tried:
             changes = ", ".join(f"{s}={v}" for s, v in experiment["settings"].items())
-            lines.append(f"- {experiment['name']}: {changes}")
+            outcome = f" -> {experiment['outcome']}" if experiment.get("outcome") else ""
+            lines.append(f"- {experiment['name']}: {changes}{outcome}")
     else:
         lines.append("Nothing yet.")
 

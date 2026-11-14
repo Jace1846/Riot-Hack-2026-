@@ -15,6 +15,9 @@ Tuning a game's settings for lower-end PCs usually means hours of manual profili
 4. **Validate:** any setting or value that isn't on the allowlist is rejected before Unreal runs.
 5. **Benchmark:** the scene runs again with the experiment's settings, under the same scene, camera and resolution.
 6. **Verify:** plain Python code, not the AI, compares median and p95 frame time and writes a before/after report.
+7. **Keep or discard, then repeat:** only a measured improvement is kept. The AI is told the result and proposes the next change on top.
+
+At the end you get a summary: start vs best, every round, and the settings to apply. You decide whether to apply them.
 
 **Core rule:** the AI suggests. Measurements decide. The developer approves.
 
@@ -54,21 +57,22 @@ py main.py
 
 This opens FrameOptimizer in its own window. Then:
 
-1. **Measure:** choose **Unreal** (click *Benchmark in Unreal*) or **CSV file** (paste the path to a capture).
-2. Read the results: frame-time stats, the CPU vs GPU bottleneck verdict, a frame-time chart, and the cost of each GPU pass.
-3. **Ask the agent:** paste your API key and click *Propose experiment*. The proposal is validated and saved to `experiments/`.
+1. Paste your API key, pick the number of rounds, and click **Optimize**. Unreal opens and closes once per run.
+2. Watch the progress lines, then read the result: start vs best, each round's verdict, and the settings to apply.
+3. The charts below show the best run: frame-time stats, the CPU vs GPU bottleneck, and the cost of each GPU pass.
+
+**Benchmark** (top right) only measures the baseline, and the **CSV** tab analyzes a capture you already have. Neither uses the AI.
 
 Your API key is only kept in the page's memory and never written to disk.
 
 ### Command line
 
 ```
-py main.py propose <baseline.csv>                        AI proposes one experiment (needs ANTHROPIC_API_KEY)
-py main.py run <experiment.json>                         Benchmark baseline + experiment in Unreal, write a report
+py main.py optimize [rounds]                             Run the full loop in Unreal (needs ANTHROPIC_API_KEY). Default 3 rounds
 py main.py report <before.csv> <after.csv> <exp.json>    Write a report from two existing captures
 ```
 
-Reports are saved to `reports/<experiment name>/report.md`.
+Each optimize run saves to its own folder: `reports/run_<date>_<time>/summary.md`, plus one `report.md` per round.
 
 ### Tests
 
@@ -84,8 +88,8 @@ The tests need neither Unreal nor an API key. The AI is replaced by a fake clien
 main.py         Entry point: no arguments opens the window; otherwise runs a command
 controller/     All the Python logic (see code map below)
 ui/             server.py (local web server) + index.html (the FrameOptimizer window)
-experiments/    allowlist.json, baseline.json, one JSON per experiment
-reports/        One folder per experiment with its report.md
+experiments/    allowlist.json (what may be changed) and baseline.json (starting settings)
+reports/        One folder per optimize run: summary.md plus a report per round
 tests/          pytest tests, one file per controller file; fixtures/ holds a hand-made test CSV
 unreal/         Unreal scene and setup notes
 ```
@@ -95,11 +99,12 @@ unreal/         Unreal scene and setup notes
 | Step | File | What it does | Start reading at |
 |---|---|---|---|
 | Front door | `main.py` | Opens the window or runs the command you typed | `main()` |
-| Window | `ui/server.py` | Local server for the page; launches benchmarks on request | `Handler` |
+| Window | `ui/server.py` | Local server for the page; starts the loop and reports its progress | `Handler` |
+| The loop | `controller/pipeline.py` | The one optimization loop, used by both the window and the command line | `optimize()` |
 | Propose | `controller/agent.py` | Asks Claude for one experiment, retries once if it's rejected | `propose_experiment()` |
 | Validate + benchmark | `controller/benchmark.py` | Checks the allowlist, launches Unreal, finds the new CSV | `validate_experiment()`, `run_benchmark()` |
 | Analyze | `controller/analysis.py` | CSV → median/p95 frame time, GPU passes, CPU/GPU bottleneck; compares two runs | `summarize_csv()`, `compare()` |
-| Report | `controller/report.py` | Writes the before/after Markdown report | `build_report()` |
+| Report | `controller/report.py` | Writes each round's before/after report and the run summary | `build_report()`, `build_summary()` |
 
 Every controller file starts with the same header: what it does, its loop step, and which function to read first.
 
@@ -108,4 +113,5 @@ Every controller file starts with the same header: what it does, its loop step, 
 - Every number FrameOptimizer shows comes from an Unreal CSV profiler capture that you run or supply. No measurements are invented.
 - The test CSV in `tests/fixtures/` is hand-made test input. It is only used by the tests and is never shown as a result.
 - The CPU/GPU bottleneck is an estimate from Unreal's measured thread times; very close calls are labeled "mixed".
+- Each setting is measured with one Unreal run, so changes under 3% are treated as noise, not improvements.
 - Lower graphics settings can reduce visual quality. Each report lists the visual trade-off of every changed setting.

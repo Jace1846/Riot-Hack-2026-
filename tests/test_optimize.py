@@ -1,4 +1,4 @@
-"""Tests for main.optimize(). SYNTHETIC: a fake Unreal (made-up frame times) and a fake AI,
+"""Tests for controller.pipeline.optimize(). SYNTHETIC: a fake Unreal (made-up frame times) and a fake AI,
 so these only check the loop's logic - keep what improves, discard the rest. Not real measurements."""
 import json
 from pathlib import Path
@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from controller.analysis import summarize_csv
-from main import optimize
+from controller.pipeline import optimize
 
 ROOT = Path(__file__).parent.parent
 SAMPLE = summarize_csv(ROOT / "tests" / "fixtures" / "sample.csv")
@@ -60,3 +60,42 @@ def test_rejects_bad_round_counts():
     for bad in (0, 11, "3"):
         with pytest.raises(ValueError):
             optimize(bad, config={}, measure=fake_unreal)
+
+
+def test_ai_sees_the_measured_outcome_of_earlier_rounds(tmp_path):
+    client = FakeClient(proposal("fog_off", "r.VolumetricFog", 0),
+                        proposal("aa_3", "r.PostProcessAAQuality", 3))
+    client.prompts = []
+    create = client._create
+    client.beta.messages.create = lambda **kw: (client.prompts.append(kw["messages"][0]["content"]), create(**kw))[1]
+
+    optimize(2, config={}, client=client, progress=lambda line: None, measure=fake_unreal, reports_folder=tmp_path)
+
+    assert "fog_off: r.VolumetricFog=0 -> no clear change (median +1.0%), discarded" in client.prompts[1]
+
+
+def test_run_writes_a_summary_with_the_settings_to_apply(tmp_path):
+    client = FakeClient(proposal("aa_3", "r.PostProcessAAQuality", 3))
+    result = optimize(1, config={}, client=client, progress=lambda line: None,
+                      measure=fake_unreal, reports_folder=tmp_path)
+
+    summary = Path(result["summary_report"]).read_text(encoding="utf-8")
+    assert "## Overall: improved" in summary
+    assert "`r.PostProcessAAQuality`: 4 → 3" in summary
+    assert "has not changed your Unreal project" in summary
+
+
+def test_failed_round_stops_the_run_but_keeps_finished_rounds(tmp_path):
+    def unreal_dies_on_fog(experiment, current_best):
+        if experiment["settings"].get("r.VolumetricFog") == 0:
+            raise RuntimeError("Benchmark failed: no new CSV appeared")
+        return fake_unreal(experiment, current_best)
+
+    client = FakeClient(proposal("aa_3", "r.PostProcessAAQuality", 3),
+                        proposal("fog_off", "r.VolumetricFog", 0))
+    result = optimize(3, config={}, client=client, progress=lambda line: None,
+                      measure=unreal_dies_on_fog, reports_folder=tmp_path)
+
+    assert len(result["rounds"]) == 1 and result["rounds"][0]["kept"]
+    assert "Stopped in round 2" in result["stopped_early"]
+    assert result["best_settings"]["r.PostProcessAAQuality"] == 3

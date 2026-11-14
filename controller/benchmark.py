@@ -8,8 +8,8 @@ import subprocess
 import time
 from pathlib import Path
 
-# Added to every run so frame rate is never capped by the monitor or Unreal.
-UNCAP_FPS = ["r.VSync 0", "t.MaxFPS 0"]
+# Added to every run: never cap the frame rate, and record per-pass GPU times (the GPU/... columns).
+EVERY_RUN = ["r.VSync 0", "t.MaxFPS 0", "r.GPUCsvStatsEnabled 1"]
 
 
 def validate_experiment(experiment, allowlist):
@@ -50,15 +50,22 @@ def run_benchmark(experiment, baseline, allowlist, config, dry_run=False):
     if not Path(config["unreal_exe"]).exists():
         raise FileNotFoundError(f"Unreal not found at {config['unreal_exe']} - check config.local.json")
 
-    started = time.time()
-    try:
-        subprocess.run(command, timeout=config["timeout_seconds"])
-    except subprocess.TimeoutExpired:
-        # Unreal may not quit by itself after profiling. subprocess has already closed it;
-        # if the capture finished, the CSV is still there and we pick it up below.
-        print(f"Note: Unreal was closed after {config['timeout_seconds']}s timeout.")
-
     csv_folder = capture_folder(config)
+    started = time.time()
+    process = subprocess.Popen(command)
+    try:
+        # Unreal doesn't quit by itself after profiling. So we watch for the finished CSV and
+        # close Unreal as soon as it's complete (or when the timeout runs out).
+        while process.poll() is None and time.time() - started < config["timeout_seconds"]:
+            newest = find_newest_csv(csv_folder, started)
+            if newest is not None and capture_finished(newest):
+                break
+            time.sleep(1)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+
     csv_path = find_newest_csv(csv_folder, started)
     if csv_path is None:
         raise RuntimeError(f"Benchmark failed: no new CSV appeared in {csv_folder}")
@@ -70,7 +77,7 @@ def build_command(experiment, baseline, config):
     settings = {**baseline["settings"], **experiment["settings"]}
 
     console_commands = [f"{name} {value}" for name, value in settings.items()]
-    console_commands += UNCAP_FPS
+    console_commands += EVERY_RUN
     console_commands.append(f"csvprofile frames={config['frames']}")
 
     width, height = config["resolution"]
@@ -91,6 +98,15 @@ def load_json(path):
 def capture_folder(config):
     """The folder where Unreal's csvprofile command saves its CSV files for this project."""
     return Path(config["project"]).parent / "Saved" / "Profiling" / "CSV"
+
+
+def capture_finished(csv_path):
+    """True once Unreal has written the whole capture: the last line is its metadata line, which starts with '['."""
+    try:
+        lines = Path(csv_path).read_text(errors="ignore").strip().splitlines()
+    except OSError:  # Unreal is still holding the file
+        return False
+    return bool(lines) and lines[-1].startswith("[")
 
 
 def find_newest_csv(folder, started_after=0):

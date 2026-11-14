@@ -66,8 +66,6 @@
     pre { background: var(--code-bg); padding: 6px 8px; border-radius: 6px; overflow-x: auto; margin: 4px 0 0; }
     .change { font-size: 13px; margin: 2px 0; }
     .reason { margin: 6px 0; }
-    ul.tried { margin: 0; padding-left: 16px; }
-    ul.tried li { margin: 2px 0; }
     .muted { color: var(--muted); }
     footer { color: var(--muted); font-size: 11px; text-align: center; margin-top: 8px; }
 
@@ -146,33 +144,37 @@
       const [apiKey, setApiKey] = useState("");
       const [source, setSource] = useState("unreal");  // "unreal" or "csv": where the measurements come from
       const [csvPath, setCsvPath] = useState("");
-      const [busy, setBusy] = useState("");  // "", "analyze", "benchmark" or "propose"
+      const [busy, setBusy] = useState("");  // "", "analyze", "benchmark" or "optimize"
       const [error, setError] = useState("");
       const [note, setNote] = useState("");
       const [summary, setSummary] = useState(null);
-      const [proposal, setProposal] = useState(null);
-      const [tried, setTried] = useState([]);
+      const [rounds, setRounds] = useState(3);
+      const [progress, setProgress] = useState([]);  // status lines from the running optimize loop
+      const [result, setResult] = useState(null);    // what the optimize loop found
 
-      const loadTried = () =>
-        fetch("/api/experiments").then(r => r.json()).then(d => setTried(d.experiments || [])).catch(() => {});
-
-      // On startup: if Unreal has already saved a capture, show it.
+      // On startup: rejoin a running optimize, or show the last result, or Unreal's newest capture.
       useEffect(() => {
-        loadTried();
-        fetch("/api/latest-csv").then(r => r.json()).then(d => {
-          if (d.csv_path) {
-            setCsvPath(d.csv_path);
-            setNote(`Showing Unreal's newest capture: ${d.csv_path}`);
-            analyze(d.csv_path);
-          } else {
-            setNote(d.note);
+        fetch("/api/optimize/status").then(r => r.json()).then(status => {
+          if (status.running) {
+            setBusy("optimize");
+            return watchOptimize().finally(() => setBusy(""));
           }
+          if (status.result) return showResult(status.result);
+          return fetch("/api/latest-csv").then(r => r.json()).then(d => {
+            if (d.csv_path) {
+              setCsvPath(d.csv_path);
+              setNote(`Showing Unreal's newest capture: ${d.csv_path}`);
+              analyze(d.csv_path);
+            } else {
+              setNote(d.note);
+            }
+          });
         }).catch(() => {});
       }, []);
 
       async function analyze(path = csvPath) {
         if (!path.trim()) return setError("Enter the path to a CSV file first.");
-        setBusy("analyze"); setError(""); setProposal(null);
+        setBusy("analyze"); setError("");
         try {
           const data = await postJson("/api/analyze", { csv_path: path });
           setSummary(data.summary);
@@ -184,7 +186,7 @@
       }
 
       async function benchmark() {
-        setBusy("benchmark"); setError(""); setProposal(null);
+        setBusy("benchmark"); setError("");
         try {
           const data = await postJson("/api/benchmark", {});
           setCsvPath(data.csv_path);
@@ -197,18 +199,36 @@
         }
       }
 
-      async function propose() {
-        setBusy("propose"); setError(""); setProposal(null);
+      // The full loop: the server runs it in the background and we ask for its progress every second.
+      async function optimize() {
+        setBusy("optimize"); setError(""); setResult(null); setProgress([]);
         try {
-          const data = await postJson("/api/propose", { api_key: apiKey, csv_path: csvPath });
-          setSummary(data.summary);
-          setProposal(data);
-          loadTried();
+          await postJson("/api/optimize", { api_key: apiKey, rounds: Number(rounds) });
+          await watchOptimize();
         } catch (e) {
           setError(e.message);
         } finally {
           setBusy("");
         }
+      }
+
+      async function watchOptimize() {
+        while (true) {
+          const status = await fetch("/api/optimize/status").then(r => r.json());
+          setProgress(status.lines);
+          if (!status.running) {
+            if (status.error) setError(status.error);
+            if (status.result) showResult(status.result);
+            return;
+          }
+          await new Promise(done => setTimeout(done, 1000));
+        }
+      }
+
+      function showResult(found) {
+        setResult(found);
+        setSummary(found.best);
+        setNote("Charts below show the best run of the last optimization.");
       }
 
       return (
@@ -244,46 +264,87 @@
                         style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{note}</p>}
             {busy === "benchmark" && (
               <div className="banner warn running">
-                Unreal is running the benchmark scene with the baseline settings. This can take a few minutes.
+                Unreal is running the benchmark scene with the baseline settings.
                 Leave the Unreal window alone until it closes.
               </div>
             )}
           </div>
 
           {error && <div className="banner error">{error}</div>}
-          {summary && <Measurements summary={summary} />}
 
           <div className="card">
-            <h2>2. Ask the agent for an experiment</h2>
+            <h2>Optimize</h2>
+            <p className="hint" style={{ margin: "0 0 6px" }}>
+              Measures the baseline in Unreal. Then, each round, the AI proposes one approved change,
+              Unreal tests it, and only measured improvements are kept.
+            </p>
             <label htmlFor="key">Anthropic API key</label>
             <input id="key" type="password" autoComplete="off" placeholder="sk-ant-..."
                    value={apiKey} onChange={e => setApiKey(e.target.value)} />
             <div className="hint">Kept in this page's memory only and sent to your local server. Never saved.</div>
-            <button onClick={propose} disabled={!!busy}>
-              {busy === "propose" ? "Asking the agent…" : "Propose experiment"}
-            </button>
-          </div>
-
-          {proposal && <Proposal data={proposal} />}
-
-          <div className="card">
-            <h2>Experiments on file</h2>
-            {tried.length === 0 ? <p className="muted">None yet.</p> : (
-              <ul className="tried">
-                {tried.map(t => (
-                  <li key={t.name}>
-                    <code>{t.name}</code>{" "}
-                    <span className="muted">
-                      {Object.entries(t.settings).map(([s, v]) => `${s}=${v}`).join(", ")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+            <label htmlFor="rounds">Rounds (1 to 10, one Unreal run each)</label>
+            <input id="rounds" type="number" min="1" max="10" value={rounds} style={{ width: 70 }}
+                   onChange={e => setRounds(e.target.value)} />
+            <div>
+              <button onClick={optimize} disabled={!!busy}>
+                {busy === "optimize" ? "Optimizing…" : "▶ Optimize"}
+              </button>
+            </div>
+            {busy === "optimize" && (
+              <p className="hint">Unreal opens and closes once per run. Leave its window alone.</p>
             )}
+            {progress.length > 0 && <pre>{progress.join("\n")}</pre>}
           </div>
 
-          <footer>Runs locally at 127.0.0.1. Benchmarks still run from the terminal on the Unreal machine.</footer>
+          {result && <Result result={result} />}
+          {summary && <Measurements summary={summary} />}
+
+          <footer>Runs locally at 127.0.0.1. Nothing in your Unreal project is changed.</footer>
         </main>
+      );
+    }
+
+    // What the optimize loop found: start vs best, every round, and the settings to apply.
+    function Result({ result }) {
+      const { start, best, total, rounds } = result;
+      const changed = Object.entries(result.best_settings).filter(([s, v]) => result.start_settings[s] !== v);
+      const signed = pct => `${pct > 0 ? "+" : ""}${pct}%`;
+
+      return (
+        <div className="card">
+          <h2>Result: {total.verdict}</h2>
+          <div className="stats">
+            <div className="stat"><b>{start.median_ms} → {best.median_ms} ms</b><small>median frame ({signed(total.median_change_pct)})</small></div>
+            <div className="stat"><b>{start.p95_ms} → {best.p95_ms} ms</b><small>p95 frame ({signed(total.p95_change_pct)})</small></div>
+            <div className="stat"><b>{start.median_fps} → {best.median_fps}</b><small>median FPS</small></div>
+          </div>
+          {result.stopped_early && <div className="banner warn">{result.stopped_early}</div>}
+
+          <h3>Rounds</h3>
+          <table>
+            <thead><tr><th>#</th><th>Change</th><th>Median</th><th>Verdict</th></tr></thead>
+            <tbody>
+              {rounds.map(r => (
+                <tr key={r.round} title={r.experiment.reason}>
+                  <td>{r.round}</td>
+                  <td>{Object.entries(r.experiment.settings).map(([s, v]) => `${s}=${v}`).join(", ")}</td>
+                  <td>{signed(r.comparison.median_change_pct)}</td>
+                  <td>{r.comparison.verdict}, <b>{r.kept ? "kept" : "discarded"}</b></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="hint">Hover a row to read why the AI proposed it.</p>
+
+          <h3>Settings to apply</h3>
+          {changed.length === 0
+            ? <p className="muted" style={{ margin: 0 }}>No tested change gave a clear measured improvement. Keep the starting settings.</p>
+            : changed.map(([setting, value]) => (
+                <div className="change" key={setting}><code>{setting}</code>: {result.start_settings[setting]} → <b>{value}</b></div>
+              ))}
+          <p className="hint">You approve: check the visual trade-offs in the reports, then apply these in Unreal yourself.</p>
+          <p className="hint" title={result.summary_report}>Summary: <code>{result.summary_report}</code></p>
+        </div>
       );
     }
 
@@ -482,22 +543,6 @@
           </div>
           <p className="hint">Hover to inspect a frame. The line that sits just under "Frame time" is the bottleneck. Spikes are hitches.</p>
         </>
-      );
-    }
-
-    function Proposal({ data }) {
-      const { experiment, saved_to } = data;
-      return (
-        <div className="card">
-          <h2>Agent proposal: <code>{experiment.name}</code></h2>
-          {Object.entries(experiment.settings).map(([setting, value]) => (
-            <div className="change" key={setting}><code>{setting}</code> → <b>{value}</b></div>
-          ))}
-          <p className="reason"><b>Why:</b> {experiment.reason}</p>
-          <p className="muted">Passed the allowlist check. Saved to <code>{saved_to}</code>.</p>
-          <h2 style={{ marginTop: 16 }}>3. Review it, then benchmark it</h2>
-          <pre>py main.py run {saved_to}</pre>
-        </div>
       );
     }
 

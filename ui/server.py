@@ -14,21 +14,22 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))  # so "controller" and "main" can be imported when run from ui/
+sys.path.insert(0, str(ROOT))  # so "controller" can be imported when run from ui/
 
 import anthropic  # noqa: E402
 
-from controller.agent import propose_experiment  # noqa: E402
 from controller.analysis import summarize_csv  # noqa: E402
-from controller.benchmark import capture_folder, find_newest_csv, load_json, run_benchmark  # noqa: E402
-from main import _load_rules, load_tried_experiments, save_experiment  # noqa: E402
+from controller.benchmark import capture_folder, find_newest_csv, run_benchmark  # noqa: E402
+from controller.pipeline import CONFIG, load_config, load_rules, optimize  # noqa: E402
 
 PAGE = Path(__file__).parent / "index.html"
-CONFIG = ROOT / "config.local.json"
 HOST, PORT = "127.0.0.1", 8000
 
-# Only one Unreal benchmark at a time: two at once would fight over the GPU and ruin both measurements.
-BENCHMARK_LOCK = threading.Lock()
+# Only one Unreal job at a time: two at once would fight over the GPU and ruin both measurements.
+UNREAL_LOCK = threading.Lock()
+
+# The optimize loop takes minutes, so it runs in the background and the page asks for this every second.
+OPTIMIZE = {"running": False, "lines": [], "result": None, "error": None}
 
 # Edge ships with Windows. Its "app mode" opens a clean window with no tabs or address bar.
 EDGE_PATHS = [
@@ -41,62 +42,52 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/", "/index.html"):
             self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
-        elif self.path == "/api/experiments":
-            self._send_json(200, {"experiments": load_tried_experiments()})
         elif self.path == "/api/latest-csv":
             self._send_json(200, latest_capture())
+        elif self.path == "/api/optimize/status":
+            self._send_json(200, OPTIMIZE)
         else:
             self._send_json(404, {"error": "Not found"})
 
     def do_POST(self):
-        if self.path == "/api/benchmark":
-            return self._benchmark()
-        if self.path not in ("/api/analyze", "/api/propose"):
+        routes = {"/api/analyze": self._analyze, "/api/benchmark": self._benchmark, "/api/optimize": self._optimize}
+        if self.path not in routes:
             return self._send_json(404, {"error": "Not found"})
         try:
-            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
-            csv_path = body.get("csv_path", "").strip()
-            if not csv_path:
-                raise ValueError("Measure first: run a benchmark in Unreal or choose a CSV file.")
-
-            # Analyze: just the measurements. No AI, no API key needed.
-            if self.path == "/api/analyze":
-                summary = summarize_csv(ROOT / csv_path)
-                return self._send_json(200, {"summary": summary})
-
-            api_key = body.get("api_key", "").strip()
-            if not api_key:
-                raise ValueError("Paste your Anthropic API key first.")
-
-            allowlist, baseline = _load_rules()
-            summary = summarize_csv(ROOT / csv_path)
-            client = anthropic.Anthropic(api_key=api_key)
-            experiment = propose_experiment(summary, allowlist, baseline, load_tried_experiments(), client=client)
-            path = save_experiment(experiment)
-
-            self._send_json(200, {
-                "experiment": experiment,
-                "saved_to": str(path.relative_to(ROOT)),
-                "summary": summary,
-            })
-        except (FileNotFoundError, ValueError, RuntimeError) as error:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or "{}")
+            routes[self.path](body)
+        except (FileNotFoundError, ValueError, RuntimeError, KeyError) as error:
             self._send_json(400, {"error": str(error)})
 
-    def _benchmark(self):
-        """Launch Unreal with the baseline settings, wait for the CSV, and return its analysis."""
-        if not BENCHMARK_LOCK.acquire(blocking=False):
-            return self._send_json(409, {"error": "A benchmark is already running. Wait for Unreal to finish."})
+    def _analyze(self, body):
+        """Just the measurements of one CSV. No Unreal, no AI."""
+        csv_path = body.get("csv_path", "").strip()
+        if not csv_path:
+            raise ValueError("Enter the path to a CSV file first.")
+        self._send_json(200, {"summary": summarize_csv(ROOT / csv_path)})
+
+    def _benchmark(self, body):
+        """Measure only: launch Unreal with the baseline settings and return the capture's analysis."""
+        if not UNREAL_LOCK.acquire(blocking=False):
+            return self._send_json(409, {"error": "Unreal is already running a benchmark. Wait for it to finish."})
         try:
-            config = load_config()
-            allowlist, baseline = _load_rules()
-            print("Running baseline benchmark in Unreal...")
-            csv_path = run_benchmark(baseline, baseline, allowlist, config)
-            print(f"Captured {csv_path}")
+            allowlist, baseline = load_rules()
+            csv_path = run_benchmark(baseline, baseline, allowlist, load_config())
             self._send_json(200, {"csv_path": str(csv_path), "summary": summarize_csv(csv_path)})
-        except (FileNotFoundError, ValueError, RuntimeError, KeyError) as error:
-            self._send_json(400, {"error": f"Benchmark failed: {error}"})
         finally:
-            BENCHMARK_LOCK.release()
+            UNREAL_LOCK.release()
+
+    def _optimize(self, body):
+        """Start the full loop in the background. The page follows it through /api/optimize/status."""
+        api_key = str(body.get("api_key", "")).strip()
+        if not api_key:
+            raise ValueError("Paste your Anthropic API key first.")
+        config = load_config()
+        if not UNREAL_LOCK.acquire(blocking=False):
+            return self._send_json(409, {"error": "Unreal is already running a benchmark. Wait for it to finish."})
+        OPTIMIZE.update(running=True, lines=[], result=None, error=None)
+        threading.Thread(target=run_optimize, args=(body.get("rounds"), config, api_key), daemon=True).start()
+        self._send_json(202, {"started": True})
 
     def _send_json(self, status, data):
         self._send(status, json.dumps(data).encode(), "application/json")
@@ -110,14 +101,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         # Only log the method and path, never request bodies (which contain the API key).
+        if self.path == "/api/optimize/status":
+            return  # the page asks every second; don't flood the terminal
         print(f"{self.command} {self.path} -> {args[1] if len(args) > 1 else ''}")
 
 
-def load_config():
-    """Read config.local.json (Unreal paths for this PC). Raises a clear error if it's missing."""
-    if not CONFIG.exists():
-        raise FileNotFoundError("config.local.json not found. Copy config.example.json and fill in your Unreal paths.")
-    return load_json(CONFIG)
+def run_optimize(rounds, config, api_key):
+    """Background job: run the loop, collecting progress lines and the final result for the page."""
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        OPTIMIZE["result"] = optimize(rounds, config, client=client, progress=OPTIMIZE["lines"].append)
+    except (FileNotFoundError, ValueError, RuntimeError, KeyError) as error:
+        OPTIMIZE["error"] = f"Optimize failed: {error}"
+    finally:
+        OPTIMIZE["running"] = False
+        UNREAL_LOCK.release()
 
 
 def latest_capture():
