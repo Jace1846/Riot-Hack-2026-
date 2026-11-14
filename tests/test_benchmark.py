@@ -11,7 +11,7 @@ ALLOWLIST = load_json(EXPERIMENTS / "allowlist.json")
 
 
 def test_example_experiment_is_approved():
-    assert validate_experiment(load_json(EXPERIMENTS / "shadow_02.json"), ALLOWLIST) == []
+    assert validate_experiment(load_json(Path(__file__).parent / "fixtures" / "experiment.json"), ALLOWLIST) == []
 
 
 def test_baseline_is_approved():
@@ -44,7 +44,7 @@ def test_all_problems_are_reported_at_once():
 
 BASELINE = load_json(EXPERIMENTS / "baseline.json")
 CONFIG = load_json(Path(__file__).parent.parent / "config.example.json")
-SHADOW = load_json(EXPERIMENTS / "shadow_02.json")
+SHADOW = load_json(Path(__file__).parent / "fixtures" / "experiment.json")
 
 
 def test_command_merges_baseline_and_experiment():

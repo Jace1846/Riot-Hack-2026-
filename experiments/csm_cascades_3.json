@@ -1,7 +1,0 @@
-{
-  "name": "csm_cascades_3",
-  "reason": "GPU/ShadowDepths is the second-largest pass at 3.31 ms, and shadow resolution has already been tried, so reducing CSM cascades from 4 to 3 tests the other main shadow cost driver. The visual cost should be limited to less shadow detail on distant objects.",
-  "settings": {
-    "r.Shadow.CSM.MaxCascades": 3
-  }
-}

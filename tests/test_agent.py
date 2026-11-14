@@ -14,7 +14,7 @@ ROOT = Path(__file__).parent.parent
 ALLOWLIST = load_json(ROOT / "experiments" / "allowlist.json")
 BASELINE = load_json(ROOT / "experiments" / "baseline.json")
 SUMMARY = summarize_csv(ROOT / "tests" / "fixtures" / "sample.csv")
-TRIED = [load_json(ROOT / "experiments" / "shadow_02.json")]
+TRIED = [load_json(ROOT / "tests" / "fixtures" / "experiment.json")]
 
 
 class FakeClient:

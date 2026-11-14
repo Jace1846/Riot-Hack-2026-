@@ -8,7 +8,7 @@ from controller.report import build_report, save_report
 ROOT = Path(__file__).parent.parent
 ALLOWLIST = load_json(ROOT / "experiments" / "allowlist.json")
 BASELINE = load_json(ROOT / "experiments" / "baseline.json")
-SHADOW = load_json(ROOT / "experiments" / "shadow_02.json")
+SHADOW = load_json(ROOT / "tests" / "fixtures" / "experiment.json")
 
 BEFORE = summarize_csv(ROOT / "tests" / "fixtures" / "sample.csv")
 # A made-up "after" run: every time 10% faster. Only for testing the report layout.

@@ -1,7 +1,0 @@
-{
-  "name": "screen_pct_85",
-  "reason": "GPU/BasePass is the largest GPU cost at 3.95 ms of the 14.1 ms median frame, and it scales with internal resolution. Since shadow resolution 1024 was already tried, lowering r.ScreenPercentage one step from 100 to 85 tests the biggest remaining cost with a modest softening of the image.",
-  "settings": {
-    "r.ScreenPercentage": 85
-  }
-}
