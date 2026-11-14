@@ -1,7 +1,0 @@
-{
-  "id": "shadow_02",
-  "description": "Lower shadow quality from Epic (3) to High (2)",
-  "changes": {
-    "sg.ShadowQuality": 2
-  }
-}

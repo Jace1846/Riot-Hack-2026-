@@ -1,7 +1,0 @@
-{
-  "unreal_editor": "C:/Program Files/Epic Games/UE_5.x/Engine/Binaries/Win64/UnrealEditor.exe",
-  "uproject": "C:/path/to/FrameForgeBench/FrameForgeBench.uproject",
-  "res_x": 1920,
-  "res_y": 1080,
-  "timeout_seconds": 300
-}
