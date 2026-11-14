@@ -1,0 +1,37 @@
+{
+  "sg.ShadowQuality": {
+    "min": 0,
+    "max": 4,
+    "description": "Shadow quality preset (0 = Low, 1 = Medium, 2 = High, 3 = Epic, 4 = Cinematic)"
+  },
+  "sg.ViewDistanceQuality": {
+    "min": 0,
+    "max": 4,
+    "description": "How far away objects are still drawn in detail"
+  },
+  "sg.PostProcessQuality": {
+    "min": 0,
+    "max": 4,
+    "description": "Post-processing effects (bloom, depth of field, motion blur, etc.)"
+  },
+  "sg.GlobalIlluminationQuality": {
+    "min": 0,
+    "max": 4,
+    "description": "Bounced/indirect lighting quality (Lumen GI)"
+  },
+  "sg.ReflectionQuality": {
+    "min": 0,
+    "max": 4,
+    "description": "Reflection quality (Lumen reflections)"
+  },
+  "sg.EffectsQuality": {
+    "min": 0,
+    "max": 4,
+    "description": "Particle and visual effects quality"
+  },
+  "r.ScreenPercentage": {
+    "min": 50,
+    "max": 100,
+    "description": "Internal render resolution as a percent of the window resolution"
+  }
+}
