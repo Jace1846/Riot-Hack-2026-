@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from controller.benchmark import _find_newest_csv, build_command, load_json, run_benchmark, validate_experiment
+from controller.benchmark import build_command, capture_folder, find_newest_csv, load_json, run_benchmark, validate_experiment
 
 EXPERIMENTS = Path(__file__).parent.parent / "experiments"
 ALLOWLIST = load_json(EXPERIMENTS / "allowlist.json")
@@ -86,6 +86,11 @@ def test_find_newest_csv_ignores_old_files(tmp_path):
     os.utime(old, (1000, 1000))  # pretend old.csv was written long ago
     os.utime(new, (3000, 3000))
 
-    assert _find_newest_csv(tmp_path, started_after=2000) == new
-    assert _find_newest_csv(tmp_path, started_after=4000) is None
-    assert _find_newest_csv(tmp_path / "missing", started_after=0) is None
+    assert find_newest_csv(tmp_path, started_after=2000) == new
+    assert find_newest_csv(tmp_path, started_after=4000) is None
+    assert find_newest_csv(tmp_path / "missing", started_after=0) is None
+
+
+def test_capture_folder_is_inside_the_unreal_project():
+    folder = capture_folder({"project": "C:/Games/MyGame/MyGame.uproject"})
+    assert folder == Path("C:/Games/MyGame/Saved/Profiling/CSV")

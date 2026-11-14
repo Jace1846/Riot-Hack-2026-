@@ -13,7 +13,7 @@ from controller.benchmark import load_json
 ROOT = Path(__file__).parent.parent
 ALLOWLIST = load_json(ROOT / "experiments" / "allowlist.json")
 BASELINE = load_json(ROOT / "experiments" / "baseline.json")
-SUMMARY = summarize_csv(ROOT / "tests" / "fixtures" / "sample_synthetic.csv")
+SUMMARY = summarize_csv(ROOT / "tests" / "fixtures" / "sample.csv")
 TRIED = [load_json(ROOT / "experiments" / "shadow_02.json")]
 
 
@@ -37,7 +37,7 @@ BAD = {"name": "too_far", "reason": "test", "settings": [{"setting": "r.ScreenPe
 
 def test_prompt_contains_measurements_rules_and_history():
     prompt = build_prompt(SUMMARY, ALLOWLIST, BASELINE, TRIED)
-    assert "SYNTHETIC" in prompt
+    assert "Median frame time: 14.1 ms" in prompt
     assert "GPU/ShadowDepths: 3.31" in prompt
     assert "r.Shadow.MaxResolution: allowed values [2048, 1024, 512]" in prompt
     assert "shadow_02: r.Shadow.MaxResolution=1024" in prompt

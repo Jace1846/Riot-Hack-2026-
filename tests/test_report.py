@@ -1,4 +1,4 @@
-"""Tests for controller/report.py. All numbers here are SYNTHETIC, not real Unreal measurements."""
+"""Tests for controller/report.py. The fixture CSV is hand-made test input, not a real capture."""
 from pathlib import Path
 
 from controller.analysis import compare, summarize_csv
@@ -10,7 +10,7 @@ ALLOWLIST = load_json(ROOT / "experiments" / "allowlist.json")
 BASELINE = load_json(ROOT / "experiments" / "baseline.json")
 SHADOW = load_json(ROOT / "experiments" / "shadow_02.json")
 
-BEFORE = summarize_csv(ROOT / "tests" / "fixtures" / "sample_synthetic.csv")
+BEFORE = summarize_csv(ROOT / "tests" / "fixtures" / "sample.csv")
 # A made-up "after" run: every time 10% faster. Only for testing the report layout.
 AFTER = {
     **BEFORE,
@@ -32,18 +32,6 @@ def test_report_contains_the_key_sections():
     assert "## Verdict: improved" in report
     assert "Blurrier, more pixelated shadow edges" in report  # trade-off from allowlist
     assert "GPU/ShadowDepths" in report
-
-
-def test_synthetic_data_gets_a_warning_banner():
-    assert "SYNTHETIC TEST DATA" in make_report()
-
-
-def test_real_data_is_labeled_real():
-    real_before = {**BEFORE, "synthetic": False}
-    real_after = {**AFTER, "synthetic": False}
-    report = make_report(real_before, real_after)
-    assert "real Unreal CSV profiler captures" in report
-    assert "SYNTHETIC" not in report
 
 
 def test_report_has_bottleneck_section():

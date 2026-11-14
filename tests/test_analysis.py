@@ -1,19 +1,18 @@
-"""Tests for controller/analysis.py. All data here is SYNTHETIC, not real Unreal measurements."""
+"""Tests for controller/analysis.py. The fixture CSV is hand-made test input, not a real capture."""
 from pathlib import Path
 
 import pytest
 
 from controller.analysis import compare, summarize_csv
 
-FIXTURE = Path(__file__).parent / "fixtures" / "sample_synthetic.csv"
+FIXTURE = Path(__file__).parent / "fixtures" / "sample.csv"
 
 
 # ---------------------------------------------------------------- summarize_csv
 
-def test_summary_of_synthetic_fixture():
+def test_summary_of_fixture():
     summary = summarize_csv(FIXTURE)
 
-    assert summary["synthetic"] is True  # footer says [synthetic],true
     assert summary["frames"] == 280  # 300 frames minus 20 warm-up (footer rows ignored)
     assert 13.5 < summary["median_ms"] < 14.5
     assert summary["p95_ms"] >= summary["median_ms"]
@@ -34,12 +33,6 @@ def test_csv_without_frametime_raises(tmp_path):
         summarize_csv(bad)
 
 
-def test_file_without_synthetic_label_is_not_flagged(tmp_path):
-    plain = tmp_path / "plain.csv"
-    plain.write_text("FrameTime\n" + "14.0\n" * 40)
-    assert summarize_csv(plain)["synthetic"] is False
-
-
 def test_too_few_frames_raises(tmp_path):
     short = tmp_path / "short.csv"
     short.write_text("FrameTime\n" + "14.0\n" * 25)  # only 5 left after warm-up
@@ -49,7 +42,7 @@ def test_too_few_frames_raises(tmp_path):
 
 # ---------------------------------------------------------------- bottleneck
 
-def test_synthetic_fixture_is_gpu_bound():
+def test_fixture_is_gpu_bound():
     bottleneck = summarize_csv(FIXTURE)["bottleneck"]
 
     assert bottleneck["bound"] == "gpu"

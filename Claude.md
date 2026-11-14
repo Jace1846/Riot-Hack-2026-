@@ -173,4 +173,6 @@ For new development tasks, use this structure:
 
 Do not overwhelm me with code or technical terminology.
 
+Keep responses short to conserve tokens, but still explain. I have ADHD.
+
 **Remember: Understanding the system is just as important as building it.**

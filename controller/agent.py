@@ -65,8 +65,6 @@ def propose_experiment(summary, allowlist, baseline, tried, client=None):
 def build_prompt(summary, allowlist, baseline, tried):
     """Turn measurements + rules into the text Claude reads."""
     lines = ["## Baseline measurements"]
-    if summary["synthetic"]:
-        lines.append("(Note: SYNTHETIC test data, not a real Unreal capture.)")
     lines += [
         f"Median frame time: {summary['median_ms']} ms ({summary['median_fps']} FPS)",
         f"p95 frame time: {summary['p95_ms']} ms, worst frame: {summary['max_ms']} ms",

@@ -16,6 +16,8 @@ EXPERIMENTS = ROOT / "experiments"
 REPORTS = ROOT / "reports"
 
 USAGE = """Usage:
+  py main.py
+      Open the FrameForge window (benchmark, charts, and AI in one place).
   py main.py propose <baseline.csv>
       Ask the AI to propose one experiment. Writes experiments/<name>.json for you to review.
   py main.py run <experiment.json>
@@ -26,7 +28,12 @@ USAGE = """Usage:
 
 def main(args):
     """args = the words typed after 'py main.py'. Returns 0 on success, 1 on bad usage."""
-    if len(args) == 2 and args[0] == "propose":
+    if len(args) == 0:
+        # Imported here, not at the top: ui/server.py imports from this file, so a top-level
+        # import would be circular.
+        from ui.server import start
+        start()
+    elif len(args) == 2 and args[0] == "propose":
         propose_command(args[1])
     elif len(args) == 2 and args[0] == "run":
         run_command(args[1])
@@ -48,8 +55,6 @@ def propose_command(baseline_csv):
     experiment = propose_experiment(summary, allowlist, baseline, tried)
     path = save_experiment(experiment)
 
-    if summary["synthetic"]:
-        print("  [Based on SYNTHETIC DATA]")
     print(f"Proposal: {experiment['settings']}")
     print(f"Reason:   {experiment['reason']}")
     print(f"Saved to: {path}")
@@ -119,10 +124,9 @@ def _analyze_and_report(experiment, baseline, allowlist, before_csv, after_csv):
     text = build_report(experiment, baseline, before, after, comparison, allowlist)
     path = save_report(text, REPORTS / experiment["name"])
 
-    label = "  [SYNTHETIC DATA]" if before["synthetic"] or after["synthetic"] else ""
     print(
         f"{experiment['name']}: {comparison['verdict']} "
-        f"(median {comparison['median_change_pct']:+.1f}%, p95 {comparison['p95_change_pct']:+.1f}%){label}"
+        f"(median {comparison['median_change_pct']:+.1f}%, p95 {comparison['p95_change_pct']:+.1f}%)"
     )
     print(f"Report: {path}")
 

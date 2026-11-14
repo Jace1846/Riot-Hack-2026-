@@ -44,6 +44,10 @@
     button { margin-top: 16px; padding: 10px 18px; border: 0; border-radius: 8px; background: var(--accent);
              color: var(--accent-text); font: inherit; font-weight: 600; cursor: pointer; }
     button:disabled { opacity: 0.6; cursor: wait; }
+    .tabs { display: inline-flex; gap: 2px; padding: 3px; margin-bottom: 14px; border-radius: 10px; background: var(--code-bg); }
+    .tabs button { margin: 0; padding: 6px 16px; background: transparent; color: var(--muted); font-weight: 600; }
+    .tabs button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    .running { margin-top: 12px; }
     .banner { padding: 10px 12px; border-radius: 8px; font-size: 14px; margin-bottom: 12px; }
     .warn { background: var(--warn-bg); color: var(--warn-text); }
     .error { background: var(--error-bg); color: var(--error-text); }
@@ -137,9 +141,11 @@
     function App() {
       // The key lives only in this React state: never saved to localStorage or disk.
       const [apiKey, setApiKey] = useState("");
-      const [csvPath, setCsvPath] = useState("tests/fixtures/sample_synthetic.csv");
-      const [busy, setBusy] = useState("");  // "", "analyze" or "propose"
+      const [source, setSource] = useState("unreal");  // "unreal" or "csv": where the measurements come from
+      const [csvPath, setCsvPath] = useState("");
+      const [busy, setBusy] = useState("");  // "", "analyze", "benchmark" or "propose"
       const [error, setError] = useState("");
+      const [note, setNote] = useState("");
       const [summary, setSummary] = useState(null);
       const [proposal, setProposal] = useState(null);
       const [tried, setTried] = useState([]);
@@ -147,13 +153,40 @@
       const loadTried = () =>
         fetch("/api/experiments").then(r => r.json()).then(d => setTried(d.experiments || [])).catch(() => {});
 
-      useEffect(() => { loadTried(); }, []);
+      // On startup: if Unreal has already saved a capture, show it.
+      useEffect(() => {
+        loadTried();
+        fetch("/api/latest-csv").then(r => r.json()).then(d => {
+          if (d.csv_path) {
+            setCsvPath(d.csv_path);
+            setNote(`Showing Unreal's newest capture: ${d.csv_path}`);
+            analyze(d.csv_path);
+          } else {
+            setNote(d.note);
+          }
+        }).catch(() => {});
+      }, []);
 
-      async function analyze() {
+      async function analyze(path = csvPath) {
+        if (!path.trim()) return setError("Enter the path to a CSV file first.");
         setBusy("analyze"); setError(""); setProposal(null);
         try {
-          const data = await postJson("/api/analyze", { csv_path: csvPath });
+          const data = await postJson("/api/analyze", { csv_path: path });
           setSummary(data.summary);
+        } catch (e) {
+          setError(e.message);
+        } finally {
+          setBusy("");
+        }
+      }
+
+      async function benchmark() {
+        setBusy("benchmark"); setError(""); setProposal(null);
+        try {
+          const data = await postJson("/api/benchmark", {});
+          setCsvPath(data.csv_path);
+          setSummary(data.summary);
+          setNote("Fresh capture from Unreal.");
         } catch (e) {
           setError(e.message);
         } finally {
@@ -181,13 +214,41 @@
           <p className="tagline">The AI suggests. Measurements decide. The developer approves.</p>
 
           <div className="card">
-            <h2>1. Analyze a capture</h2>
-            <label htmlFor="csv">Unreal CSV profile (path inside the project)</label>
-            <input id="csv" value={csvPath} onChange={e => setCsvPath(e.target.value)} />
-            <div className="hint">No API key needed. Shows the frame times and whether the CPU or GPU is the bottleneck.</div>
-            <button onClick={analyze} disabled={!!busy}>
-              {busy === "analyze" ? "Analyzing…" : "Analyze CSV"}
-            </button>
+            <h2>1. Measure</h2>
+            <div className="tabs" role="tablist" aria-label="Measurement source">
+              <button role="tab" aria-selected={source === "unreal"} className={source === "unreal" ? "on" : ""}
+                      onClick={() => setSource("unreal")} disabled={!!busy}>Unreal</button>
+              <button role="tab" aria-selected={source === "csv"} className={source === "csv" ? "on" : ""}
+                      onClick={() => setSource("csv")} disabled={!!busy}>CSV file</button>
+            </div>
+
+            {source === "unreal" ? (
+              <>
+                <p className="hint" style={{ marginTop: 0 }}>
+                  Launches Unreal with the baseline settings, records the benchmark scene, and analyzes the capture.
+                  Uses the paths in <code>config.local.json</code>.
+                </p>
+                {note && <p className="hint">{note}</p>}
+                <button onClick={benchmark} disabled={!!busy}>
+                  {busy === "benchmark" ? "Unreal is running…" : "Benchmark in Unreal"}
+                </button>
+              </>
+            ) : (
+              <>
+                <label htmlFor="csv">Path to an Unreal CSV profile</label>
+                <input id="csv" value={csvPath} placeholder="C:/Games/MyGame/Saved/Profiling/CSV/capture.csv"
+                       onChange={e => setCsvPath(e.target.value)} />
+                <button onClick={() => analyze()} disabled={!!busy}>
+                  {busy === "analyze" ? "Analyzing…" : "Analyze CSV"}
+                </button>
+              </>
+            )}
+            {busy === "benchmark" && (
+              <div className="banner warn running">
+                Unreal is running the benchmark scene with the baseline settings. This can take a few minutes.
+                Leave the Unreal window alone until it closes.
+              </div>
+            )}
           </div>
 
           {error && <div className="banner error">{error}</div>}
@@ -235,7 +296,6 @@
         <>
           <div className="card">
             <h2>Measurements</h2>
-            {summary.synthetic && <div className="banner warn">⚠ SYNTHETIC TEST DATA. Not real Unreal measurements.</div>}
             <div className="stats">
               <div className="stat"><b>{summary.median_ms} ms</b><small>median frame</small></div>
               <div className="stat"><b>{summary.p95_ms} ms</b><small>p95 frame</small></div>

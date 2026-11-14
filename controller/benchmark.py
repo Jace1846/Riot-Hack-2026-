@@ -58,8 +58,8 @@ def run_benchmark(experiment, baseline, allowlist, config, dry_run=False):
         # if the capture finished, the CSV is still there and we pick it up below.
         print(f"Note: Unreal was closed after {config['timeout_seconds']}s timeout.")
 
-    csv_folder = Path(config["project"]).parent / "Saved" / "Profiling" / "CSV"
-    csv_path = _find_newest_csv(csv_folder, started)
+    csv_folder = capture_folder(config)
+    csv_path = find_newest_csv(csv_folder, started)
     if csv_path is None:
         raise RuntimeError(f"Benchmark failed: no new CSV appeared in {csv_folder}")
     return csv_path
@@ -88,9 +88,12 @@ def load_json(path):
         return json.load(f)
 
 
-# ---------------------------------------------------------------- Helpers
+def capture_folder(config):
+    """The folder where Unreal's csvprofile command saves its CSV files for this project."""
+    return Path(config["project"]).parent / "Saved" / "Profiling" / "CSV"
 
-def _find_newest_csv(folder, started_after):
+
+def find_newest_csv(folder, started_after=0):
     """Return the newest CSV in folder created after started_after (a time.time() value), or None."""
     folder = Path(folder)
     if not folder.exists():

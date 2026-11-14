@@ -16,13 +16,6 @@ def build_report(experiment, baseline, before, after, comparison, allowlist):
     """Return the report as a Markdown string. before/after are summaries from analysis.summarize_csv()."""
     lines = [f"# FrameForge report: {experiment['name']}", ""]
 
-    # Data source banner - always first, so nobody mistakes test data for real results.
-    if before["synthetic"] or after["synthetic"]:
-        lines.append("> ⚠ **SYNTHETIC TEST DATA.** These numbers are not real Unreal measurements.")
-    else:
-        lines.append("> Data source: real Unreal CSV profiler captures.")
-    lines.append("")
-
     lines += ["## What changed", ""]
     for setting, new_value in experiment["settings"].items():
         old_value = baseline["settings"].get(setting, "engine default")

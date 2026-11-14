@@ -300,4 +300,4 @@ FrameTime,FrameNum,GameThreadTime,RenderThreadTime,GPUTime,GPU/BasePass,GPU/Shad
 13.23,298,5.35,7.42,12.70,3.78,2.93,1.93,1.41,0.84
 14.01,299,5.19,7.53,13.27,3.78,3.30,1.98,1.49,0.81
 FrameTime,FrameNum,GameThreadTime,RenderThreadTime,GPUTime,GPU/BasePass,GPU/ShadowDepths,GPU/Lights,GPU/PostProcessing,GPU/Translucency
-[HasHeaderRowAtEnd],1,[platform],Windows,[config],Development,[resolution],1920x1080,[gpu],AMD Radeon RX 7600 XT,[synthetic],true
+[HasHeaderRowAtEnd],1,[platform],Windows,[config],Development,[resolution],1920x1080,[gpu],AMD Radeon RX 7600 XT

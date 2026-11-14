@@ -52,12 +52,7 @@ def summarize_csv(path, skip_warmup=20):
     sorted_times = sorted(frame_times)
     median_ms = statistics.median(sorted_times)
 
-    # Fake test files label themselves in their footer, so reports can't mistake them for real data.
-    with open(path) as f:
-        synthetic = "[synthetic],true" in f.read()
-
     return {
-        "synthetic": synthetic,
         "frames": len(frame_times),
         "median_ms": round(median_ms, 2),
         "p95_ms": round(_percentile(sorted_times, 95), 2),
