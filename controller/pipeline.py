@@ -3,6 +3,7 @@
 Loop: measure -> AI proposes -> validate -> benchmark in Unreal -> compare -> keep or discard -> repeat.
 Start reading at: optimize().
 """
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -25,8 +26,53 @@ def load_rules():
 def load_config():
     """Read config.local.json (Unreal paths for this PC). Raises a clear error if it's missing."""
     if not CONFIG.exists():
-        raise FileNotFoundError("config.local.json not found. Copy config.example.json and fill in your Unreal paths.")
+        raise FileNotFoundError("No Unreal project set yet. Paste your .uproject path in the FrameOptimizer window.")
     return load_json(CONFIG)
+
+
+# Kept the same for every run, so measurements stay comparable.
+RUN_DEFAULTS = {"resolution": [1920, 1080], "frames": 600, "timeout_seconds": 180}
+EPIC_GAMES = Path("C:/Program Files/Epic Games")  # where the Epic launcher installs Unreal
+
+
+def make_config(uproject, unreal_exe="", map_name="", epic_folder=EPIC_GAMES):
+    """Build the whole config from just the .uproject path. unreal_exe and map_name are optional overrides."""
+    project = Path(uproject.strip().strip('"'))  # Windows "Copy as path" wraps the path in quotes
+    if project.suffix.lower() != ".uproject":
+        raise ValueError("That isn't a .uproject file. Pick the .uproject file inside your Unreal project folder.")
+    if not project.exists():
+        raise FileNotFoundError(f"File not found: {project}")
+
+    # The .uproject is JSON. "EngineAssociation" says which Unreal version it belongs to, e.g. "5.5".
+    version = load_json(project).get("EngineAssociation", "")
+    exe = Path(unreal_exe.strip().strip('"')) if unreal_exe.strip() else (
+        epic_folder / f"UE_{version}" / "Engine" / "Binaries" / "Win64" / "UnrealEditor.exe")
+    if not exe.exists():
+        raise FileNotFoundError(f"Couldn't find Unreal {version} at {exe}. Paste the path to UnrealEditor.exe "
+                                "under More options.")
+
+    return {"unreal_exe": exe.as_posix(), "project": project.as_posix(),
+            "map": map_name.strip() or default_map(project), **RUN_DEFAULTS}
+
+
+def default_map(project):
+    """The map the project opens by default (GameDefaultMap in DefaultEngine.ini), or "" if none is set.
+
+    The ini stores it as "/Game/Maps/Benchmark.Benchmark"; Unreal's command line wants "/Game/Maps/Benchmark".
+    """
+    ini = Path(project).parent / "Config" / "DefaultEngine.ini"
+    if not ini.exists():
+        return ""
+    for line in ini.read_text(encoding="utf-8-sig", errors="ignore").splitlines():
+        key, _, value = line.partition("=")
+        if key.strip().lower() == "gamedefaultmap" and value.strip():
+            return value.strip().split(".")[0]
+    return ""
+
+
+def save_config(config):
+    """Write config.local.json (ignored by Git, so these paths stay on this PC)."""
+    CONFIG.write_text(json.dumps(config, indent=2))
 
 
 def optimize(rounds, config, client=None, progress=print, measure=None, reports_folder=None, goal=""):

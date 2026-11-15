@@ -96,6 +96,9 @@
     .split div { height: 100%; }
     .split div:first-child { border-radius: 4px 0 0 4px; }
     .split div:last-child { border-radius: 0 4px 4px 0; }
+    .project { display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
+    .project span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .project button { margin: 0 0 0 auto; padding: 2px 10px; }
     details { margin-top: 6px; font-size: 12px; }
     summary { cursor: pointer; color: var(--muted); }
     table { border-collapse: collapse; margin-top: 6px; font-variant-numeric: tabular-nums; }
@@ -140,6 +143,77 @@
       return data;
     }
 
+    // Where Unreal is: paste the .uproject path once; the server finds Unreal and the map by itself.
+    function ProjectCard({ disabled, onSaved }) {
+      const [config, setConfig] = useState(undefined);  // undefined = still loading, null = not set yet
+      const [editing, setEditing] = useState(false);
+      const [uproject, setUproject] = useState("");
+      const [mapName, setMapName] = useState("");  // optional: blank = the project's default map
+      const [exe, setExe] = useState("");          // optional: blank = find Unreal automatically
+      const [error, setError] = useState("");
+      const [saving, setSaving] = useState(false);
+
+      useEffect(() => {
+        fetch("/api/project").then(r => r.json()).then(d => setConfig(d.config)).catch(() => setConfig(null));
+      }, []);
+
+      async function save() {
+        setSaving(true); setError("");
+        try {
+          const data = await postJson("/api/project", { uproject, map: mapName, unreal_exe: exe });
+          setConfig(data.config);
+          setEditing(false);
+          onSaved();
+        } catch (e) {
+          setError(e.message);
+        } finally {
+          setSaving(false);
+        }
+      }
+
+      function change() {
+        setUproject(config.project); setMapName(""); setExe(""); setError(""); setEditing(true);
+      }
+
+      if (config === undefined) return null;
+
+      // Project already set: one compact line.
+      if (config && !editing) {
+        const name = config.project.split("/").pop().replace(/\.uproject$/i, "");
+        const version = (config.unreal_exe.match(/UE_([^/]+)/) || [])[1];
+        const details = `${version ? `UE ${version} · ` : ""}${config.map || "default map"}`;
+        return (
+          <div className="card project" title={config.project}>
+            <b>{name}</b> <span className="muted">✓ {details}</span>
+            <button onClick={change} disabled={disabled}>Change</button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="card">
+          <h2>Unreal project</h2>
+          <label htmlFor="uproject">Path to your .uproject file</label>
+          <input id="uproject" value={uproject} onChange={e => setUproject(e.target.value)}
+                 placeholder="e.g. C:/UnrealProjects/StackOBot/StackOBot.uproject" />
+          <div className="hint">Tip: in File Explorer, right-click the .uproject file and choose "Copy as path".</div>
+          <details>
+            <summary>More options</summary>
+            <label htmlFor="map">Benchmark map (blank = the project's default map)</label>
+            <input id="map" value={mapName} onChange={e => setMapName(e.target.value)} placeholder="/Game/Maps/Benchmark" />
+            <label htmlFor="exe">UnrealEditor.exe (blank = find it automatically)</label>
+            <input id="exe" value={exe} onChange={e => setExe(e.target.value)}
+                   placeholder="C:/Program Files/Epic Games/UE_5.5/Engine/Binaries/Win64/UnrealEditor.exe" />
+          </details>
+          {error && <div className="banner error" style={{ margin: "6px 0 0" }}>{error}</div>}
+          <button onClick={save} disabled={saving || disabled || !uproject.trim()}>
+            {saving ? "Checking…" : "Save"}
+          </button>{" "}
+          {config && <button onClick={() => setEditing(false)} disabled={saving}>Cancel</button>}
+        </div>
+      );
+    }
+
     function App() {
       // The key lives only in this React state: never saved to localStorage or disk.
       const [apiKey, setApiKey] = useState("");
@@ -162,17 +236,22 @@
             return watchOptimize().finally(() => setBusy(""));
           }
           if (status.result) return showResult(status.result);
-          return fetch("/api/latest-csv").then(r => r.json()).then(d => {
-            if (d.csv_path) {
-              setCsvPath(d.csv_path);
-              setNote(`Showing Unreal's newest capture: ${d.csv_path}`);
-              analyze(d.csv_path);
-            } else {
-              setNote(d.note);
-            }
-          });
+          return showLatestCapture();
         }).catch(() => {});
       }, []);
+
+      // Show the newest CSV Unreal already saved for this project (also re-run after the project changes).
+      async function showLatestCapture() {
+        const d = await fetch("/api/latest-csv").then(r => r.json());
+        if (d.csv_path) {
+          setCsvPath(d.csv_path);
+          setNote(`Showing Unreal's newest capture: ${d.csv_path}`);
+          analyze(d.csv_path);
+        } else {
+          setNote(d.note);
+          setSummary(null);
+        }
+      }
 
       async function analyze(path = csvPath) {
         if (!path.trim()) return setError("Enter the path to a CSV file first.");
@@ -246,7 +325,7 @@
             </div>
             {source === "unreal" ? (
               <button className="run" onClick={benchmark} disabled={!!busy}
-                      title="Launches Unreal with the baseline settings, records the benchmark scene, and analyzes the capture. Uses the paths in config.local.json.">
+                      title="Launches Unreal with the baseline settings, records the benchmark scene, and analyzes the capture. Uses the Unreal project set below.">
                 {busy === "benchmark" ? "Running…" : "▶ Benchmark"}
               </button>
             ) : (
@@ -255,6 +334,8 @@
               </button>
             )}
           </div>
+
+          {source === "unreal" && <ProjectCard disabled={!!busy} onSaved={() => showLatestCapture().catch(() => {})} />}
 
           <div style={{ marginBottom: 8 }}>
             {source === "csv" && (

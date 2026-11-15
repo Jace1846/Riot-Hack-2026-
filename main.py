@@ -15,7 +15,7 @@ USAGE = """Usage:
       Open the FrameOptimizer window (benchmark, charts, and the optimize loop in one place).
   py main.py optimize [rounds]
       Run the full loop in Unreal: measure, AI proposes, test, keep what helps. Default 3 rounds.
-      Needs config.local.json and the ANTHROPIC_API_KEY environment variable.
+      Needs the ANTHROPIC_API_KEY environment variable, and your Unreal project set once in the window.
   py main.py report <before.csv> <after.csv> <experiment.json>
       Write a report from two CSVs you already have (no Unreal or AI needed)."""
 

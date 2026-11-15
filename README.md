@@ -31,21 +31,14 @@ Requirements: Windows, Python 3.12+, Unreal Engine 5 (for benchmarks), and an An
 git clone https://github.com/Jace1846/FrameForge--Riot-Hack-2026-.git FrameOptimizer
 cd FrameOptimizer
 py -m pip install -r requirements.txt
-copy config.example.json config.local.json
 ```
 
-Then edit `config.local.json` with the paths on your PC (use forward slashes):
+Then run `py main.py` and paste the path to your `.uproject` file into the **Unreal project** box.
+FrameOptimizer finds Unreal (from the engine version in the `.uproject`) and the project's default map
+by itself. Under **More options** you can pick a different map or point at `UnrealEditor.exe` manually.
 
-| Field | Meaning |
-|---|---|
-| `unreal_exe` | Path to `UnrealEditor.exe` |
-| `project` | Path to your `.uproject` file |
-| `map` | The benchmark map, e.g. `/Game/Maps/Benchmark` |
-| `resolution` | `[width, height]`, kept the same for every run |
-| `frames` | How many frames to record per run |
-| `timeout_seconds` | Unreal is closed after this long if it hasn't quit by itself |
-
-`config.local.json` is ignored by Git, so your paths stay on your machine.
+It saves this to `config.local.json` (ignored by Git, so your paths stay on your machine). Every run uses
+1920x1080 and records 600 frames, so measurements stay comparable.
 
 ## Usage
 

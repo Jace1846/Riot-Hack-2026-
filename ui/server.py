@@ -22,7 +22,7 @@ import anthropic  # noqa: E402
 from controller.analysis import summarize_csv  # noqa: E402
 from controller.apply import apply_settings, engine_ini, undo_apply  # noqa: E402
 from controller.benchmark import capture_folder, find_newest_csv, run_benchmark  # noqa: E402
-from controller.pipeline import CONFIG, load_config, load_rules, optimize  # noqa: E402
+from controller.pipeline import CONFIG, load_config, load_rules, make_config, optimize, save_config  # noqa: E402
 
 PAGE = Path(__file__).parent / "index.html"
 HOST, PORT = "127.0.0.1", 8000
@@ -44,6 +44,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/", "/index.html"):
             self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+        elif self.path == "/api/project":
+            self._send_json(200, {"config": load_config() if CONFIG.exists() else None})
         elif self.path == "/api/latest-csv":
             self._send_json(200, latest_capture())
         elif self.path == "/api/optimize/status":
@@ -53,7 +55,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         routes = {"/api/analyze": self._analyze, "/api/benchmark": self._benchmark, "/api/optimize": self._optimize,
-                  "/api/apply": self._apply, "/api/undo-apply": self._undo_apply}
+                  "/api/apply": self._apply, "/api/undo-apply": self._undo_apply, "/api/project": self._project}
         if self.path not in routes:
             return self._send_json(404, {"error": "Not found"})
         try:
@@ -61,6 +63,14 @@ class Handler(BaseHTTPRequestHandler):
             routes[self.path](body)
         except (FileNotFoundError, ValueError, RuntimeError, KeyError) as error:
             self._send_json(400, {"error": str(error)})
+
+    def _project(self, body):
+        """Set the Unreal project from a pasted .uproject path. Finds Unreal and the map, then saves the config."""
+        if UNREAL_LOCK.locked():
+            raise ValueError("Wait for the running benchmark to finish before changing the project.")
+        config = make_config(str(body.get("uproject", "")), str(body.get("unreal_exe", "")), str(body.get("map", "")))
+        save_config(config)
+        self._send_json(200, {"config": config})
 
     def _analyze(self, body):
         """Just the measurements of one CSV. No Unreal, no AI."""
@@ -148,7 +158,7 @@ def run_optimize(rounds, config, api_key, goal=""):
 def latest_capture():
     """Find the newest CSV Unreal has already saved, so the page can show it on startup."""
     if not CONFIG.exists():
-        return {"csv_path": None, "note": "No config.local.json, so Unreal's capture folder is unknown."}
+        return {"csv_path": None, "note": "Set your Unreal project above to get started."}
     newest = find_newest_csv(capture_folder(load_config()))
     if newest is None:
         return {"csv_path": None, "note": "No Unreal captures yet. Click Benchmark in Unreal."}

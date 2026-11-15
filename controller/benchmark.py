@@ -48,7 +48,7 @@ def run_benchmark(experiment, baseline, allowlist, config, dry_run=False):
         return command
 
     if not Path(config["unreal_exe"]).exists():
-        raise FileNotFoundError(f"Unreal not found at {config['unreal_exe']} - check config.local.json")
+        raise FileNotFoundError(f"Unreal not found at {config['unreal_exe']} - set your project again in the window")
 
     csv_folder = capture_folder(config)
     started = time.time()

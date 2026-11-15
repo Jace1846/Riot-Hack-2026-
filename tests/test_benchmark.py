@@ -43,7 +43,14 @@ def test_all_problems_are_reported_at_once():
 # No Unreal needed: these use dry_run, fake paths, and fake CSV files.
 
 BASELINE = load_json(EXPERIMENTS / "baseline.json")
-CONFIG = load_json(Path(__file__).parent.parent / "config.example.json")
+CONFIG = {
+    "unreal_exe": "C:/Fake/UnrealEditor.exe",  # doesn't exist, so a real launch would fail
+    "project": "C:/Fake/MyGame/MyGame.uproject",
+    "map": "/Game/Maps/Benchmark",
+    "resolution": [1920, 1080],
+    "frames": 600,
+    "timeout_seconds": 180,
+}
 SHADOW = load_json(Path(__file__).parent / "fixtures" / "experiment.json")
 
 
@@ -62,7 +69,6 @@ def test_command_uncaps_fps_and_sets_resolution_and_length():
 
 
 def test_dry_run_returns_command_without_launching():
-    # config.example.json points at a fake Unreal path, so a real launch would fail.
     command = run_benchmark(SHADOW, BASELINE, ALLOWLIST, CONFIG, dry_run=True)
     assert "-ExecCmds=" in command
 

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from controller.analysis import summarize_csv
-from controller.pipeline import optimize
+from controller.pipeline import make_config, optimize
 
 ROOT = Path(__file__).parent.parent
 SAMPLE = summarize_csv(ROOT / "tests" / "fixtures" / "sample.csv")
@@ -99,3 +99,46 @@ def test_failed_round_stops_the_run_but_keeps_finished_rounds(tmp_path):
     assert len(result["rounds"]) == 1 and result["rounds"][0]["kept"]
     assert "Stopped in round 2" in result["stopped_early"]
     assert result["best_settings"]["r.PostProcessAAQuality"] == 3
+
+
+# ---------------------------------------------------------------- make_config (project setup)
+# Builds a fake Unreal install and a fake project in a temp folder. No real Unreal needed.
+
+def fake_project(tmp_path, version="5.5", default_map="/Game/Maps/Benchmark.Benchmark"):
+    exe = tmp_path / "Epic Games" / f"UE_{version}" / "Engine" / "Binaries" / "Win64" / "UnrealEditor.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_text("")
+    project = tmp_path / "MyGame" / "MyGame.uproject"
+    (project.parent / "Config").mkdir(parents=True)
+    project.write_text(json.dumps({"EngineAssociation": version}))
+    (project.parent / "Config" / "DefaultEngine.ini").write_text(
+        f"[/Script/EngineSettings.GameMapsSettings]\nGameDefaultMap={default_map}\n")
+    return project, exe
+
+
+def test_config_is_built_from_just_the_uproject(tmp_path):
+    project, exe = fake_project(tmp_path)
+    config = make_config(f'"{project}"', epic_folder=tmp_path / "Epic Games")  # quotes, like "Copy as path"
+    assert config["unreal_exe"] == exe.as_posix()
+    assert config["project"] == project.as_posix()
+    assert config["map"] == "/Game/Maps/Benchmark"
+    assert config["resolution"] == [1920, 1080] and config["frames"] == 600
+
+
+def test_typed_map_and_exe_override_the_detected_ones(tmp_path):
+    project, exe = fake_project(tmp_path, version="5.4")
+    config = make_config(str(project), unreal_exe=str(exe), map_name="/Game/Other", epic_folder=tmp_path / "nowhere")
+    assert config["unreal_exe"] == exe.as_posix() and config["map"] == "/Game/Other"
+
+
+def test_missing_unreal_version_gives_clear_error(tmp_path):
+    project, _ = fake_project(tmp_path)
+    with pytest.raises(FileNotFoundError, match="Unreal 5.5"):
+        make_config(str(project), epic_folder=tmp_path / "nowhere")
+
+
+def test_non_uproject_paths_are_refused(tmp_path):
+    with pytest.raises(ValueError):
+        make_config(str(tmp_path / "MyGame.txt"))
+    with pytest.raises(FileNotFoundError):
+        make_config(str(tmp_path / "Missing.uproject"))
