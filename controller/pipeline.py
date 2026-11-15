@@ -4,6 +4,7 @@ Loop: measure -> AI proposes -> validate -> benchmark in Unreal -> compare -> ke
 Start reading at: optimize().
 """
 import json
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -115,6 +116,17 @@ def run_options(config, frames=None):
     return config
 
 
+def clear_old_reports(reports=REPORTS):
+    """Delete earlier runs' report folders (reports/run_*), so only the newest run is kept on disk.
+
+    Only folders named run_* are touched; anything else in reports/ stays. Returns how many were deleted.
+    """
+    old = [folder for folder in Path(reports).glob("run_*") if folder.is_dir()]
+    for folder in old:
+        shutil.rmtree(folder, ignore_errors=True)  # a locked file just leaves that folder behind; never fail a run over it
+    return len(old)
+
+
 def optimize(rounds, config, client=None, progress=print, measure=None, reports_folder=None, goal="",
              freedom=None, frames=None):
     """Measure, let the AI propose, test, keep what helps, repeat.
@@ -144,7 +156,12 @@ def optimize(rounds, config, client=None, progress=print, measure=None, reports_
     if measure is None:
         def measure(experiment, current_best):
             return summarize_csv(run_benchmark(experiment, current_best, allowlist, config))
-    # Each run gets its own folder, so an older run's reports are never overwritten.
+    # Only the newest run's reports are kept: earlier run_* folders are deleted when a new run starts.
+    # (Tests pass their own reports_folder, so they never touch the real reports/ folder.)
+    if reports_folder is None:
+        cleared = clear_old_reports()
+        if cleared:
+            progress(f"Deleted {cleared} older report folder{'s' if cleared > 1 else ''} (only the newest run is kept).")
     folder = Path(reports_folder or REPORTS / f"run_{datetime.now():%Y%m%d_%H%M%S}")
 
     progress("Measuring the baseline in Unreal...")

@@ -8,7 +8,8 @@ import pytest
 
 from controller.analysis import summarize_csv
 from controller.benchmark import build_command, validate_experiment
-from controller.pipeline import limit_allowlist, load_rules, make_config, optimize, potato_experiment, run_options
+from controller.pipeline import (clear_old_reports, limit_allowlist, load_rules, make_config, optimize,
+                                 potato_experiment, run_options)
 
 ROOT = Path(__file__).parent.parent
 SAMPLE = summarize_csv(ROOT / "tests" / "fixtures" / "sample.csv")
@@ -160,6 +161,18 @@ def test_test_length_reaches_the_unreal_command():
     assert "csvprofile frames=3000" in build_command(baseline, baseline, run_options(base, frames=3000))
     assert "csvprofile frames=1200" in build_command(baseline, baseline, run_options(base))
     assert run_options(base, frames=3600)["timeout_seconds"] >= 3600 // 20 + 120   # longer test, longer timeout
+
+
+def test_clear_old_reports_only_deletes_run_folders(tmp_path):
+    for name in ("run_20261114_210000", "run_20261114_220000"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "summary.md").write_text("old")
+    (tmp_path / ".gitkeep").write_text("")
+    (tmp_path / "my_notes").mkdir()            # not a run_* folder: must survive
+
+    assert clear_old_reports(tmp_path) == 2
+    assert sorted(p.name for p in tmp_path.iterdir()) == [".gitkeep", "my_notes"]
+    assert clear_old_reports(tmp_path) == 0      # nothing left to delete
 
 
 def test_bad_test_length_is_refused():

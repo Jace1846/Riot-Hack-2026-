@@ -32,7 +32,7 @@
     body { margin: 0; background: var(--bg); color: var(--text);
            font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
     main { max-width: 760px; margin: 0 auto; padding: 10px 12px 16px; }
-    h1 { margin: 0; font-size: 17px; letter-spacing: -0.02em; cursor: default; }
+    h1 { margin: 0; font-size: 16px; letter-spacing: -0.02em; cursor: default; }
     h1 span { color: var(--accent); }
     h2 { margin: 0; font-size: 14px; }
     h3 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
@@ -69,7 +69,9 @@
     .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
     .topbar .run { margin-left: auto; }
     .tabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--soft); }
-    .tabs button { padding: 3px 10px; background: transparent; color: var(--muted); }
+    .tabs button { padding: 3px 8px; background: transparent; color: var(--muted); }
+    .topbar .run { padding: 6px 10px; }
+    fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }  /* only used to lock the form while a run is going */
     .tabs button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
     .project { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
     .project .info { min-width: 0; flex: 1; }
@@ -136,7 +138,7 @@
     .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
     .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin: 0 0 6px; }
     .legend .line-key { display: inline-block; width: 14px; height: 2px; margin-right: 5px; vertical-align: 4px; }
-    .split { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
+    .split { display: flex; height: 14px; border-radius: 4px; overflow: hidden; margin-bottom: 6px; background: var(--soft); }
     .split div { height: 100%; }
 
     /* Frame-time chart: drawn at the real width of its box, so its text stays readable in a narrow window. */
@@ -445,8 +447,9 @@
       const freedomText = freedom === 0 ? "Preserve graphics"
         : freedom < 50 ? "Small reductions"
         : freedom < 100 ? "Big reductions" : "Potato allowed";
+      // While a run is going, the <fieldset disabled> locks every input, so it's clear the run can't be changed.
       return (
-        <>
+        <fieldset disabled={!!busy}>
           <p className="muted" style={{ marginBottom: 12 }}>
             The AI proposes approved settings, Unreal measures each one, and only real improvements are kept.
           </p>
@@ -483,7 +486,7 @@
           <button className="primary" onClick={optimize} disabled={!!busy}>
             {busy === "optimize" ? "Optimizing…" : "▶ Optimize"}
           </button>
-        </>
+        </fieldset>
       );
     }
 
@@ -604,6 +607,7 @@
             </p>
             <div className="chips">{settings.map(([s, v]) => <code className="chip" key={s}>{s}={v}</code>)}</div>
             {r.experiment.reason && <p className="muted" style={{ fontSize: 12 }}>{r.experiment.reason}</p>}
+            {r.report && <p className="hint wrap">Report: <code>{r.report}</code></p>}
           </div>
         </details>
       );
@@ -672,7 +676,8 @@
           <h3>Slowest part, frame by frame</h3>
           <div className="split" role="img"
                aria-label={parts.map(p => `${p.name} ${bottleneck.frames_limited_pct[p.key]}%`).join(", ")}>
-            {parts.filter(p => bottleneck.frames_limited_pct[p.key] > 0).map(p => (
+            {/* Shares under 1% would only draw a speck, so they're left out of the bar (the legend still lists them). */}
+            {parts.filter(p => bottleneck.frames_limited_pct[p.key] >= 1).map(p => (
               <div key={p.key} title={`${p.name}: slowest in ${bottleneck.frames_limited_pct[p.key]}% of frames`}
                    style={{ width: `${bottleneck.frames_limited_pct[p.key]}%`, background: p.color }} />
             ))}
@@ -794,10 +799,9 @@
               <rect x={left} y={top} width={plotW} height={plotH} fill="transparent" />
             </svg>
 
+            {/* Tooltip sits in the corner away from the pointer, so it never sticks out of a narrow window. */}
             {hover !== null && (
-              <div className="tooltip" style={x(hover) > W / 2
-                  ? { right: `${((W - x(hover)) / W) * 100 + 1}%` }
-                  : { left: `${(x(hover) / W) * 100 + 1}%` }}>
+              <div className="tooltip" style={x(hover) > W / 2 ? { left: left + 4 } : { right: right + 4 }}>
                 <b>Frame #{timeline.frame_index[hover]}</b>
                 {series.map(s => (
                   <div key={s.key}>
