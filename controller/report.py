@@ -78,14 +78,17 @@ def build_summary(result):
         "",
         "## Rounds",
         "",
-        "| Round | Change | Median | p95 | Verdict | Kept |",
-        "|---|---|---|---|---|---|",
+        "| Round | Change | FPS | Median | p95 | Verdict | Kept |",
+        "|---|---|---|---|---|---|---|",
     ]
     for r in result["rounds"]:
         changes = ", ".join(f"`{s}`={v}" for s, v in r["experiment"]["settings"].items())
         c = r["comparison"]
-        lines.append(f"| {r['round']} | {changes} | {c['median_change_pct']:+.1f}% | {c['p95_change_pct']:+.1f}% "
-                     f"| {c['verdict']} | {'yes' if r['kept'] else 'no'} |")
+        fps = f"{r['before']['median_fps']} → {r['after']['median_fps']}" if r.get("before") else ""
+        label = "0 (potato test)" if r.get("potato") else r["round"]
+        kept = "no (ceiling test)" if r.get("potato") else ("yes" if r["kept"] else "no")
+        lines.append(f"| {label} | {changes} | {fps} | {c['median_change_pct']:+.1f}% | {c['p95_change_pct']:+.1f}% "
+                     f"| {c['verdict']} | {kept} |")
     if result.get("stopped_early"):
         lines += ["", f"**{result['stopped_early']}**"]
 

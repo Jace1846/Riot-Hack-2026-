@@ -76,11 +76,55 @@ def save_config(config):
     CONFIG.write_text(json.dumps(config, indent=2))
 
 
-def optimize(rounds, config, client=None, progress=print, measure=None, reports_folder=None, goal=""):
+def limit_allowlist(allowlist, freedom):
+    """Trim each setting's values to what the Quality freedom slider (0-100) allows.
+
+    Values are listed best quality first. 0% keeps only the best value, 100% keeps all of them,
+    50% keeps about half. Example: [100, 85, 70, 50] at 50% -> [100, 85, 70].
+    """
+    limited = {}
+    for setting, rule in allowlist.items():
+        steps_down = int((len(rule["values"]) - 1) * freedom / 100 + 0.5)  # +0.5 rounds to nearest
+        limited[setting] = {**rule, "values": rule["values"][:1 + steps_down]}
+    return limited
+
+
+def potato_experiment(allowlist, baseline):
+    """Every setting at its lowest allowed value: the most FPS settings can buy. None if nothing would change."""
+    settings = {s: rule["values"][-1] for s, rule in allowlist.items()
+                if rule["values"][-1] != baseline["settings"].get(s)}
+    return {"name": "potato_test", "reason": "Ceiling test: every setting at its lowest allowed value.",
+            "settings": settings} if settings else None
+
+
+def _headline(summary):
+    """The three numbers the window shows for a run."""
+    return {key: summary[key] for key in ("median_ms", "p95_ms", "median_fps")}
+
+
+def run_options(config, frames=None):
+    """A copy of config with this run's test length. Every round of a run uses the same copy,
+    so all measurements in it stay comparable."""
+    if frames is not None and (not isinstance(frames, int) or not 600 <= frames <= 3600):
+        raise ValueError("Test length must be a whole number of frames from 600 to 3600.")
+    config = {**config}
+    if frames is not None:
+        config["frames"] = frames
+        # Longer tests need more time before we give up on Unreal (assumes at least ~20 FPS, plus startup).
+        config["timeout_seconds"] = max(config.get("timeout_seconds", 300), frames // 20 + 120)
+    return config
+
+
+def optimize(rounds, config, client=None, progress=print, measure=None, reports_folder=None, goal="",
+             freedom=None, frames=None):
     """Measure, let the AI propose, test, keep what helps, repeat.
 
     rounds   = how many AI experiments to try (the developer picks this).
     goal     = optional direction from the developer, passed to the AI every round.
+    freedom  = optional Quality freedom slider, 0-100. Limits how far down each setting the AI may go,
+               and first runs a potato test (everything at its lowest allowed value) to find the ceiling.
+               None = no limit and no potato test.
+    frames   = optional test length (600-3600 frames per Unreal run). None = the config's value.
     progress = called with a short status line after each step, so the UI can show it.
     measure  = optional; tests pass a fake so Unreal isn't needed. It gets
                (experiment, current_best) and returns a summary from summarize_csv().
@@ -90,7 +134,13 @@ def optimize(rounds, config, client=None, progress=print, measure=None, reports_
     if not isinstance(rounds, int) or not 1 <= rounds <= 10:
         raise ValueError("Rounds must be a whole number from 1 to 10.")
 
+    if freedom is not None and (not isinstance(freedom, int) or not 0 <= freedom <= 100):
+        raise ValueError("Quality freedom must be a whole number from 0 to 100.")
+    config = run_options(config, frames)
+
     allowlist, baseline = load_rules()
+    # What the AI may use. The slider trims it, and the validator enforces it, so it's a real limit.
+    ai_allowlist = allowlist if freedom is None else limit_allowlist(allowlist, freedom)
     if measure is None:
         def measure(experiment, current_best):
             return summarize_csv(run_benchmark(experiment, current_best, allowlist, config))
@@ -104,10 +154,35 @@ def optimize(rounds, config, client=None, progress=print, measure=None, reports_
     history = []
     stopped_early = None
 
+    # Potato test (round 0): how fast can it get with every setting at its lowest allowed value?
+    # Only measured to show the ceiling and teach the AI. It is never kept.
+    potato = potato_experiment(ai_allowlist, baseline) if freedom is not None else None
+    if potato:
+        progress(f"Potato test: every setting at its lowest allowed value ({len(potato['settings'])} settings)...")
+        try:
+            after = measure(potato, baseline)
+        except (FileNotFoundError, ValueError, RuntimeError) as error:
+            stopped_early = f"Stopped in the potato test: {error}"
+            progress(stopped_early)
+        else:
+            comparison = compare(start_summary, after)
+            report = save_report(build_report(potato, baseline, start_summary, after, comparison, allowlist),
+                                 folder / "round0_potato_test")
+            outcome = (f"{comparison['verdict']} (median {comparison['median_change_pct']:+.1f}%, "
+                       f"{start_summary['median_fps']} -> {after['median_fps']} FPS), ceiling test only, not kept")
+            tried.append({**potato, "outcome": outcome})
+            progress(f"Potato test → {outcome}")
+            history.append({"round": 0, "experiment": potato, "comparison": comparison, "kept": False,
+                            "potato": True, "before": _headline(start_summary), "after": _headline(after),
+                            "report": str(report)})
+
     for number in range(1, rounds + 1):
+        if stopped_early:
+            break
         try:
             progress(f"Round {number}/{rounds}: asking the AI for a change...")
-            experiment = propose_experiment(best_summary, allowlist, best, tried, client=client, goal=goal)
+            experiment = propose_experiment(best_summary, ai_allowlist, best, tried, client=client, goal=goal,
+                                            freedom=freedom)
             changes = ", ".join(f"{s}={v}" for s, v in experiment["settings"].items())
 
             progress(f"Round {number}/{rounds}: testing {changes} in Unreal...")
@@ -118,8 +193,9 @@ def optimize(rounds, config, client=None, progress=print, measure=None, reports_
             progress(stopped_early)
             break
 
-        comparison = compare(best_summary, after)
-        text = build_report(experiment, best, best_summary, after, comparison, allowlist)
+        before = best_summary
+        comparison = compare(before, after)
+        text = build_report(experiment, best, before, after, comparison, allowlist)
         report = save_report(text, folder / f"round{number}_{experiment['name']}")
 
         # Keep only measured improvements; the next round builds on top of them.
@@ -132,8 +208,8 @@ def optimize(rounds, config, client=None, progress=print, measure=None, reports_
                    f"{'kept' if kept else 'discarded'}")
         tried.append({**experiment, "outcome": outcome})
         progress(f"Round {number}/{rounds}: {changes} → {outcome}")
-        history.append({"round": number, "experiment": experiment, "comparison": comparison,
-                         "kept": kept, "report": str(report)})
+        history.append({"round": number, "experiment": experiment, "comparison": comparison, "kept": kept,
+                        "before": _headline(before), "after": _headline(after), "report": str(report)})
 
     result = {
         "start": start_summary,
@@ -146,6 +222,8 @@ def optimize(rounds, config, client=None, progress=print, measure=None, reports_
         "rounds": history,
         "stopped_early": stopped_early,
         "goal": goal.strip(),
+        "freedom": freedom,
+        "frames": config.get("frames"),
     }
     result["summary_report"] = str(save_report(build_summary(result), folder, "summary.md"))
     progress(f"Done. Summary: {result['summary_report']}")

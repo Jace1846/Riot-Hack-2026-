@@ -1,19 +1,19 @@
 {
   "r.ScreenPercentage": {
-    "values": [100, 85, 70],
-    "quality_impact": "Renders at lower internal resolution, so the image looks softer"
+    "values": [100, 85, 70, 50],
+    "quality_impact": "Renders at lower internal resolution, so the image looks softer; 50 is very blurry"
   },
   "r.Shadow.MaxResolution": {
     "values": [2048, 1024, 512],
     "quality_impact": "Blurrier, more pixelated shadow edges"
   },
   "r.Shadow.CSM.MaxCascades": {
-    "values": [4, 3, 2],
+    "values": [4, 3, 2, 1],
     "quality_impact": "Less shadow detail on distant objects"
   },
   "r.PostProcessAAQuality": {
-    "values": [4, 3, 2],
-    "quality_impact": "More jagged or shimmering edges"
+    "values": [4, 3, 2, 0],
+    "quality_impact": "More jagged or shimmering edges; 0 is almost no anti-aliasing"
   },
   "r.VolumetricFog": {
     "values": [1, 0],
@@ -32,44 +32,56 @@
     "quality_impact": "Low (cosmetic): removes chromatic aberration (color fringing at screen edges)"
   },
   "r.BloomQuality": {
-    "values": [5, 4, 3],
-    "quality_impact": "Low: glow around bright areas is slightly less smooth"
+    "values": [5, 4, 3, 0],
+    "quality_impact": "Low: glow around bright areas is less smooth; 0 removes bloom"
   },
   "r.DepthOfFieldQuality": {
-    "values": [2, 1],
-    "quality_impact": "Low: background/foreground blur is slightly rougher"
+    "values": [2, 1, 0],
+    "quality_impact": "Low: background/foreground blur is rougher; 0 removes it"
   },
   "r.SSR.Quality": {
-    "values": [3, 2, 1],
-    "quality_impact": "Medium: screen-space reflections get noisier and less detailed"
+    "values": [3, 2, 1, 0],
+    "quality_impact": "Medium: screen-space reflections get noisier; 0 turns them off"
   },
   "r.VolumetricFog.GridPixelSize": {
     "values": [16, 32],
     "quality_impact": "Low: coarser fog and light shafts (fog stays on)"
   },
   "r.ShadowQuality": {
-    "values": [5, 4, 3],
-    "quality_impact": "Medium: shadows get softer and less precise"
+    "values": [5, 4, 3, 2, 1, 0],
+    "quality_impact": "Medium to severe: shadows get softer and less precise; 0 turns dynamic shadows off"
   },
   "r.Lumen.ScreenProbeGather.DownsampleFactor": {
     "values": [16, 32],
     "quality_impact": "Medium: Lumen indirect lighting gets blotchier, especially in small details"
   },
   "r.Nanite.MaxPixelsPerEdge": {
-    "values": [1, 2],
-    "quality_impact": "Low to medium: Nanite meshes use slightly fewer triangles, fine detail softens"
+    "values": [1, 2, 4],
+    "quality_impact": "Low to medium: Nanite meshes use fewer triangles, fine detail softens"
   },
   "r.SkeletalMeshLODBias": {
-    "values": [0, 1],
-    "quality_impact": "Low: characters use one lower level of detail"
+    "values": [0, 1, 2],
+    "quality_impact": "Low: characters use lower levels of detail"
   },
   "r.ViewDistanceScale": {
-    "values": [1.0, 0.8, 0.6],
-    "quality_impact": "Low to medium (CPU lever): small distant objects stop drawing sooner and may pop in closer"
+    "values": [1.0, 0.8, 0.6, 0.4, 0.2],
+    "quality_impact": "Low to severe (CPU lever): distant objects stop drawing sooner; at 0.2 much of the scene pops in close to the camera"
   },
   "foliage.DensityScale": {
+    "values": [1.0, 0.75, 0.5, 0.25, 0],
+    "quality_impact": "Low at 0.75 up to severe at 0 (CPU lever): sparser grass and plants; 0 removes them"
+  },
+  "foliage.LODDistanceScale": {
     "values": [1.0, 0.75, 0.5],
-    "quality_impact": "Low at 0.75, medium at 0.5 (CPU lever): sparser grass and plants"
+    "quality_impact": "Low (CPU lever): plants switch to simpler models closer to the camera"
+  },
+  "r.StaticMeshLODDistanceScale": {
+    "values": [1.0, 1.5, 2.0, 3.0],
+    "quality_impact": "Low (CPU lever): non-Nanite meshes switch to simpler models sooner (higher = simpler sooner)"
+  },
+  "r.Shadow.DistanceScale": {
+    "values": [1.0, 0.75, 0.5, 0.25],
+    "quality_impact": "Medium (CPU and GPU lever): shadows stop being drawn closer to the camera, so fewer objects are processed for shadows; distant objects lose their shadows"
   },
   "r.Lumen.HardwareRayTracing": {
     "values": [1, 0],
@@ -82,5 +94,17 @@
   "r.Lumen.Reflections.Allow": {
     "values": [1, 0],
     "quality_impact": "Medium (GPU lever): turns off Lumen reflections; shiny surfaces fall back to simpler reflections"
+  },
+  "r.Lumen.DiffuseIndirect.Allow": {
+    "values": [1, 0],
+    "quality_impact": "Severe (GPU lever): turns off Lumen global illumination; bounced light disappears and shaded areas get flat and dark"
+  },
+  "r.VolumetricCloud": {
+    "values": [1, 0],
+    "quality_impact": "Medium (GPU lever): removes volumetric clouds from the sky"
+  },
+  "r.DistanceFieldShadowing": {
+    "values": [1, 0],
+    "quality_impact": "Medium (GPU lever): removes distance field shadows (soft shadows from distant objects)"
   }
 }

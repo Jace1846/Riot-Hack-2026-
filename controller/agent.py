@@ -20,15 +20,24 @@ You propose ONE graphics-settings experiment at a time. The goal is lower frame 
 
 Rules:
 - Only use the approved settings and values listed. Anything else is rejected automatically.
-- Change one setting (two at most), so the measurement clearly shows what caused any difference.
-- Check the CPU/GPU bottleneck first. The approved settings mainly reduce GPU work, so they help most when the scene is GPU-bound.
-  If it is CPU-bound (game or render thread), still propose the most promising setting, but say in "reason" that the gain will likely be small.
-- Target the biggest GPU costs in the measurements first.
+- Change one to three settings. One setting gives the clearest measurement. Combine two or three related settings
+  (for example several CPU levers) when the developer gives a target that single small steps cannot reach.
+  If the "Quality freedom" section says there is no limit, you may combine as many settings as you need.
+- If a potato test (every setting at its lowest allowed value) is in "Already tried", it shows the most FPS the
+  approved settings can buy. If it gave no clear change, the bottleneck is not something these settings control:
+  say so in "reason" instead of promising gains.
+- Check the CPU/GPU bottleneck first, and attack the part that is slowest:
+  - CPU-bound (game or render thread): use settings marked "CPU lever". GPU-only settings cannot speed up a CPU-bound frame.
+  - GPU-bound: target the biggest GPU passes in the measurements.
+- If the developer gives an FPS or frame-time target, work out how far the current median is from it
+  (FPS = 1000 / ms, so 150 FPS = 6.67 ms). If the gap is large, skip the small steps and go straight to stronger values.
+  Otherwise prefer the smallest step down first (for example 2048 -> 1024 before 512).
+- Changes under about 3% are within measurement noise and count as "no clear change".
 - Do not repeat an experiment that was already tried.
 - Tried experiments list their measured result. Learn from it: kept changes are already part of the current settings,
-  and a setting that gave no clear change is unlikely to help if you push it further.
-- Prefer the smallest step down first (for example 2048 -> 1024 before 512).
-- Prefer settings whose visual cost says "Low" before "Medium". If the scene is CPU-bound, try the settings marked "CPU lever" first.
+  a setting that gave no clear change is unlikely to help if you push it further, and a setting that made things worse should be avoided.
+- When there is no target, prefer settings whose visual cost says "Low" before "Medium".
+- If a target looks out of reach with the approved settings, still propose the most promising change and say so honestly in "reason".
 - In "reason", cite the specific measurement that motivated the change, in one or two sentences.
 - "name" is a short lowercase id like "shadow_res_1024".
 - If there is a "Developer's direction" section, follow it when choosing settings (for example, avoid settings the
@@ -37,7 +46,7 @@ Rules:
 Your proposal will be validated, benchmarked in Unreal, and accepted or rejected by a human developer based on real measurements."""
 
 
-def propose_experiment(summary, allowlist, baseline, tried, client=None, goal=""):
+def propose_experiment(summary, allowlist, baseline, tried, client=None, goal="", freedom=None):
     """Ask Claude for one experiment. Returns an experiment dict that has passed validation.
 
     summary  = measurements of the current settings, from analysis.summarize_csv()
@@ -45,9 +54,10 @@ def propose_experiment(summary, allowlist, baseline, tried, client=None, goal=""
     tried    = experiments already run; each may have an "outcome" line with its measured result
     client   = optional; tests pass a fake client so no real API call (or money) is used
     goal     = optional; the developer's own words about what to aim for (e.g. "keep shadows sharp")
+    freedom  = optional Quality freedom slider (0-100); the allowlist passed in is already trimmed to it
     """
     client = client or anthropic.Anthropic()
-    prompt = build_prompt(summary, allowlist, baseline, tried, goal)
+    prompt = build_prompt(summary, allowlist, baseline, tried, goal, freedom)
 
     experiment = _ask_claude(client, prompt, allowlist)
     problems = validate_experiment(experiment, allowlist)
@@ -69,11 +79,17 @@ def propose_experiment(summary, allowlist, baseline, tried, client=None, goal=""
     return experiment
 
 
-def build_prompt(summary, allowlist, baseline, tried, goal=""):
-    """Turn measurements + rules (+ the developer's direction, if any) into the text Claude reads."""
+def build_prompt(summary, allowlist, baseline, tried, goal="", freedom=None):
+    """Turn measurements + rules (+ the developer's direction and quality freedom, if any) into the text Claude reads."""
     lines = []
     if goal.strip():
         lines += ["## Developer's direction", goal.strip(), ""]
+    if freedom is not None:
+        lines += ["## Quality freedom", f"{freedom}% (the developer's slider: how much visual quality may be sacrificed)."]
+        if freedom >= 75:
+            lines.append("No limit on how many settings you combine. FPS matters more than looks; "
+                         "still pick the least destructive change that can reach the target.")
+        lines.append("")
     lines += ["## Current measurements"]
     lines += [
         f"Median frame time: {summary['median_ms']} ms ({summary['median_fps']} FPS)",

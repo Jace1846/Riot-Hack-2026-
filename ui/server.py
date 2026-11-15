@@ -100,11 +100,18 @@ class Handler(BaseHTTPRequestHandler):
         goal = str(body.get("goal", "")).strip()
         if len(goal) > 500:
             raise ValueError("Keep the direction under 500 characters.")
+        freedom = body.get("freedom", 50)
+        if not isinstance(freedom, int) or not 0 <= freedom <= 100:
+            raise ValueError("Quality freedom must be a whole number from 0 to 100.")
+        frames = body.get("frames", 1200)
+        if not isinstance(frames, int) or not 600 <= frames <= 3600:
+            raise ValueError("Test length must be a whole number of frames from 600 to 3600.")
+        options = {"freedom": freedom, "frames": frames}
         config = load_config()
         if not UNREAL_LOCK.acquire(blocking=False):
             return self._send_json(409, {"error": "Unreal is already running a benchmark. Wait for it to finish."})
         OPTIMIZE.update(running=True, lines=[], result=None, error=None)
-        threading.Thread(target=run_optimize, args=(body.get("rounds"), config, api_key, goal), daemon=True).start()
+        threading.Thread(target=run_optimize, args=(body.get("rounds"), config, api_key, goal, options), daemon=True).start()
         self._send_json(202, {"started": True})
 
     def _apply(self, body):
@@ -144,11 +151,15 @@ class Handler(BaseHTTPRequestHandler):
         print(f"{self.command} {self.path} -> {args[1] if len(args) > 1 else ''}")
 
 
-def run_optimize(rounds, config, api_key, goal=""):
-    """Background job: run the loop, collecting progress lines and the final result for the page."""
+def run_optimize(rounds, config, api_key, goal="", options=None):
+    """Background job: run the loop, collecting progress lines and the final result for the page.
+
+    options = {"freedom", "frames"} from the Optimize panel's sliders.
+    """
     try:
         client = anthropic.Anthropic(api_key=api_key)
-        OPTIMIZE["result"] = optimize(rounds, config, client=client, progress=OPTIMIZE["lines"].append, goal=goal)
+        OPTIMIZE["result"] = optimize(rounds, config, client=client, progress=OPTIMIZE["lines"].append, goal=goal,
+                                      **(options or {}))
     except Exception as error:  # any crash must reach the page, or it just shows "testing..." forever
         OPTIMIZE["error"] = f"Optimize failed: {type(error).__name__}: {error}"
     finally:

@@ -20,8 +20,14 @@
     "r.SkeletalMeshLODBias": 0,
     "r.ViewDistanceScale": 1.0,
     "foliage.DensityScale": 1.0,
+    "foliage.LODDistanceScale": 1.0,
+    "r.StaticMeshLODDistanceScale": 1.0,
+    "r.Shadow.DistanceScale": 1.0,
     "r.Lumen.HardwareRayTracing": 1,
     "r.Shadow.Virtual.Enable": 1,
-    "r.Lumen.Reflections.Allow": 1
+    "r.Lumen.Reflections.Allow": 1,
+    "r.Lumen.DiffuseIndirect.Allow": 1,
+    "r.VolumetricCloud": 1,
+    "r.DistanceFieldShadowing": 1
   }
 }

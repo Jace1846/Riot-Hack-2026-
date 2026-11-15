@@ -7,7 +7,8 @@ from types import SimpleNamespace
 import pytest
 
 from controller.analysis import summarize_csv
-from controller.pipeline import make_config, optimize
+from controller.benchmark import build_command, validate_experiment
+from controller.pipeline import limit_allowlist, load_rules, make_config, optimize, potato_experiment, run_options
 
 ROOT = Path(__file__).parent.parent
 SAMPLE = summarize_csv(ROOT / "tests" / "fixtures" / "sample.csv")
@@ -99,6 +100,78 @@ def test_failed_round_stops_the_run_but_keeps_finished_rounds(tmp_path):
     assert len(result["rounds"]) == 1 and result["rounds"][0]["kept"]
     assert "Stopped in round 2" in result["stopped_early"]
     assert result["best_settings"]["r.PostProcessAAQuality"] == 3
+
+
+# ---------------------------------------------------------------- Quality freedom slider + potato test
+
+def test_slider_trims_values_best_first():
+    allowlist = {"r.ScreenPercentage": {"values": [100, 85, 70, 50], "quality_impact": "x"},
+                 "r.VolumetricFog": {"values": [1, 0], "quality_impact": "x"}}
+    assert limit_allowlist(allowlist, 0)["r.ScreenPercentage"]["values"] == [100]
+    assert limit_allowlist(allowlist, 50)["r.ScreenPercentage"]["values"] == [100, 85, 70]
+    assert limit_allowlist(allowlist, 100)["r.ScreenPercentage"]["values"] == [100, 85, 70, 50]
+    assert limit_allowlist(allowlist, 25)["r.VolumetricFog"]["values"] == [1]     # an on/off switch needs 50%+
+    assert limit_allowlist(allowlist, 50)["r.VolumetricFog"]["values"] == [1, 0]
+
+
+def test_potato_uses_the_lowest_allowed_values():
+    allowlist = {"r.ScreenPercentage": {"values": [100, 85, 70, 50], "quality_impact": "x"},
+                 "r.VolumetricFog": {"values": [1, 0], "quality_impact": "x"}}
+    baseline = {"settings": {"r.ScreenPercentage": 100, "r.VolumetricFog": 1}}
+    assert potato_experiment(allowlist, baseline)["settings"] == {"r.ScreenPercentage": 50, "r.VolumetricFog": 0}
+    assert potato_experiment(limit_allowlist(allowlist, 0), baseline) is None   # 0%: nothing may change
+
+
+def test_validator_rejects_values_past_the_slider():
+    allowlist, _ = load_rules()
+    limited = limit_allowlist(allowlist, 50)
+    assert validate_experiment({"name": "x", "settings": {"r.ScreenPercentage": 70}}, limited) == []
+    assert validate_experiment({"name": "x", "settings": {"r.ScreenPercentage": 50}}, limited) != []
+
+
+def test_potato_round_runs_first_and_is_never_kept(tmp_path):
+    client = FakeClient(proposal("aa_3", "r.PostProcessAAQuality", 3))
+    result = optimize(1, config={}, client=client, progress=lambda line: None,
+                      measure=fake_unreal, reports_folder=tmp_path, freedom=100)
+
+    potato, ai_round = result["rounds"]
+    assert potato["potato"] and potato["round"] == 0 and not potato["kept"]
+    assert potato["experiment"]["settings"]["r.ScreenPercentage"] == 50      # lowest value at 100%
+    assert result["best_settings"]["r.ScreenPercentage"] == 100              # potato settings were not kept
+    assert ai_round["kept"]
+
+
+def test_rounds_record_real_before_and_after_numbers(tmp_path):
+    client = FakeClient(proposal("fog_off", "r.VolumetricFog", 0))
+    result = optimize(1, config={}, client=client, progress=lambda line: None,
+                      measure=fake_unreal, reports_folder=tmp_path)
+
+    r = result["rounds"][0]
+    assert r["before"]["median_ms"] == SAMPLE["median_ms"]
+    assert r["after"]["median_ms"] == round(SAMPLE["median_ms"] * 1.01, 2)  # measured even though discarded
+    assert set(r["after"]) == {"median_ms", "p95_ms", "median_fps"}
+
+
+def test_test_length_reaches_the_unreal_command():
+    allowlist, baseline = load_rules()
+    base = {"unreal_exe": "C:/Fake/UnrealEditor.exe", "project": "C:/Fake/Game.uproject", "map": "/Game/Map",
+            "resolution": [1920, 1080], "frames": 1200, "timeout_seconds": 300}
+
+    assert "csvprofile frames=3000" in build_command(baseline, baseline, run_options(base, frames=3000))
+    assert "csvprofile frames=1200" in build_command(baseline, baseline, run_options(base))
+    assert run_options(base, frames=3600)["timeout_seconds"] >= 3600 // 20 + 120   # longer test, longer timeout
+
+
+def test_bad_test_length_is_refused():
+    for bad in (599, 3601, "1200"):
+        with pytest.raises(ValueError):
+            run_options({}, frames=bad)
+
+
+def test_bad_freedom_is_refused():
+    for bad in (-1, 101, "50"):
+        with pytest.raises(ValueError):
+            optimize(1, config={}, measure=fake_unreal, freedom=bad)
 
 
 # ---------------------------------------------------------------- make_config (project setup)

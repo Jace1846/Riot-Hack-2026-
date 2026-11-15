@@ -225,6 +225,8 @@
       const [summary, setSummary] = useState(null);
       const [rounds, setRounds] = useState(3);
       const [goal, setGoal] = useState("");  // the developer's direction for the AI (optional)
+      const [freedom, setFreedom] = useState(50);  // Quality freedom slider: how far down each setting the AI may go
+      const [frames, setFrames] = useState(1200);  // Test length slider: frames recorded per Unreal run
       const [progress, setProgress] = useState([]);  // status lines from the running optimize loop
       const [result, setResult] = useState(null);    // what the optimize loop found
 
@@ -284,7 +286,8 @@
       async function optimize() {
         setBusy("optimize"); setError(""); setResult(null); setProgress([]);
         try {
-          await postJson("/api/optimize", { api_key: apiKey, rounds: Number(rounds), goal });
+          await postJson("/api/optimize", { api_key: apiKey, rounds: Number(rounds), goal, freedom: Number(freedom),
+                                          frames: Number(frames) });
           await watchOptimize();
         } catch (e) {
           setError(e.message);
@@ -373,6 +376,22 @@
             <textarea id="goal" rows="2" maxLength={500} value={goal} onChange={e => setGoal(e.target.value)}
                       placeholder={'e.g. "Moody horror scene: keep shadows and fog. Aim for 60 FPS." or "Competitive: max FPS, blur and fog don\'t matter."'} />
             <div className="hint">Steers which approved settings the AI tries. It can't unlock anything outside the allowlist.</div>
+            <label htmlFor="freedom">Quality freedom: {freedom}%</label>
+            <input id="freedom" type="range" min="0" max="100" step="5" value={freedom}
+                   onChange={e => setFreedom(e.target.value)} style={{ width: "100%" }} />
+            <div className="hint">
+              {freedom == 0 ? "Preserve graphics: nothing may be lowered."
+                : freedom < 50 ? "Small reductions only."
+                : freedom < 100 ? "Big reductions allowed: lighting, foliage, resolution, effects."
+                : "Potato allowed: anything in the allowlist can go to its lowest value."}
+              {" "}First runs a potato test (everything at its lowest allowed value) to show the most FPS settings can buy.
+            </div>
+            <label htmlFor="frames">Test length: {frames} frames per run</label>
+            <input id="frames" type="range" min="600" max="3600" step="300" value={frames}
+                   onChange={e => setFrames(e.target.value)} style={{ width: "100%" }} />
+            <div className="hint">
+              ≈ {Math.round(frames / 100)} s per run at 100 FPS. Longer = less noisy numbers, but slower. The first 60 frames are skipped as warm-up.
+            </div>
             <div>
               <button onClick={optimize} disabled={!!busy}>
                 {busy === "optimize" ? "Optimizing…" : "▶ Optimize"}
@@ -425,6 +444,10 @@
         <div className="card">
           <h2>Result: {total.verdict}</h2>
           {result.goal && <p className="hint" style={{ margin: "0 0 6px" }}>Your direction: “{result.goal}”</p>}
+          {result.freedom != null && <p className="hint" style={{ margin: "0 0 6px" }}>
+            Quality freedom: {result.freedom}% · Test length: {result.frames} frames</p>}
+          {changed.length === 0 && <p className="hint" style={{ margin: "0 0 6px" }}>
+            Nothing was kept, so baseline and result are the same. Each round's real numbers are in the table below.</p>}
           <div className="stats">
             <div className="stat"><b>{start.median_ms} → {best.median_ms} ms</b><small>median frame ({signed(total.median_change_pct)})</small></div>
             <div className="stat"><b>{start.p95_ms} → {best.p95_ms} ms</b><small>p95 frame ({signed(total.p95_change_pct)})</small></div>
@@ -434,14 +457,15 @@
 
           <h3>Rounds</h3>
           <table>
-            <thead><tr><th>#</th><th>Change</th><th>Median</th><th>Verdict</th></tr></thead>
+            <thead><tr><th>#</th><th>Change</th><th>FPS (before → after)</th><th>Median frame</th><th>Verdict</th></tr></thead>
             <tbody>
               {rounds.map(r => (
                 <tr key={r.round} title={r.experiment.reason}>
-                  <td>{r.round}</td>
+                  <td>{r.potato ? "Potato" : r.round}</td>
                   <td>{Object.entries(r.experiment.settings).map(([s, v]) => `${s}=${v}`).join(", ")}</td>
-                  <td>{signed(r.comparison.median_change_pct)}</td>
-                  <td>{r.comparison.verdict}, <b>{r.kept ? "kept" : "discarded"}</b></td>
+                  <td>{r.before ? `${r.before.median_fps} → ${r.after.median_fps}` : ""}</td>
+                  <td>{r.before ? `${r.before.median_ms} → ${r.after.median_ms} ms ` : ""}({signed(r.comparison.median_change_pct)})</td>
+                  <td>{r.comparison.verdict}, <b>{r.potato ? "ceiling test, not kept" : r.kept ? "kept" : "discarded"}</b></td>
                 </tr>
               ))}
             </tbody>
