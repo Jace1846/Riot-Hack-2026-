@@ -185,7 +185,7 @@ def open_window(url):
             # (An already-running Edge ignores it, so the window opened big and then shrank.)
             # Kept in AppData, not the project folder, so OneDrive and Git don't pick it up.
             profile = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "FrameOptimizer" / "edge-profile"
-            subprocess.Popen([str(edge), f"--app={url}", "--window-size=360,480", f"--user-data-dir={profile}",
+            subprocess.Popen([str(edge), f"--app={url}", "--window-size=420,780", f"--user-data-dir={profile}",
                               "--no-first-run", "--no-default-browser-check"])
             return
     webbrowser.open(url)

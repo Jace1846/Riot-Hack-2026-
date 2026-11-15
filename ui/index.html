@@ -4,115 +4,159 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>FrameOptimizer</title>
-  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+  <!-- React + Babel load from cdnjs (Cloudflare). Same versions as before; unpkg.com was unreliable. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
   <style>
     :root {
-      --bg: #f6f7f9; --card: #ffffff; --text: #16181d; --muted: #5d6573; --border: #dde1e7;
-      --accent: #d13639; --accent-text: #ffffff; --warn-bg: #fff4d6; --warn-text: #7a5300;
-      --error-bg: #fde7e7; --error-text: #9b1c1c; --bar: #d13639; --code-bg: #f0f2f5;
-      --grid: #e6e9ee;
-      /* Chart series colors (validated colorblind-safe set): one fixed color per engine part. */
-      --s-game: #1baf7a; --s-render: #eb6834; --s-gpu: #2a78d6; --s-frame: #16181d;
+      --bg: #f4f5f7; --card: #ffffff; --text: #16181d; --muted: #5d6573; --border: #dde1e7; --soft: #eef0f3;
+      --accent: #d13639; --accent-text: #ffffff;
+      --good: #1a7f4b; --good-bg: #e3f5ea; --bad: #b42318; --bad-bg: #fdecea; --info: #1f6fc5; --info-bg: #e5f0fc;
+      --warn-bg: #fff4d6; --warn-text: #7a5300; --grid: #e6e9ee;
+      /* Chart series colors (colorblind-safe set): one fixed color per engine part, used everywhere. */
+      --s-game: #1baf7a; --s-render: #eb6834; --s-gpu: #2a78d6; --s-frame: #16181d; --s-pass: #d13639;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #111317; --card: #1a1d23; --text: #e8eaee; --muted: #9aa3b2; --border: #2c313a;
-        --accent: #ff5a5f; --accent-text: #111317; --warn-bg: #3a2f10; --warn-text: #ffd27a;
-        --error-bg: #3d1717; --error-text: #ffb3b3; --bar: #ff5a5f; --code-bg: #232730;
-        --grid: #262a32;
-        --s-game: #199e70; --s-render: #d95926; --s-gpu: #3987e5; --s-frame: #e8eaee;
+        --bg: #111317; --card: #1a1d23; --text: #e8eaee; --muted: #9aa3b2; --border: #2c313a; --soft: #232730;
+        --accent: #ff5a5f; --accent-text: #111317;
+        --good: #5fd39a; --good-bg: #173326; --bad: #ff8a80; --bad-bg: #3d1717; --info: #7fb2f0; --info-bg: #172a40;
+        --warn-bg: #3a2f10; --warn-text: #ffd27a; --grid: #262a32;
+        --s-game: #199e70; --s-render: #d95926; --s-gpu: #3987e5; --s-frame: #e8eaee; --s-pass: #ff5a5f;
       }
     }
+
+    /* ---------- Base: built for a narrow window beside the running game (360-420px), fine when wider. */
     * { box-sizing: border-box; }
-    /* Compact layout: built to sit in a narrow window beside the running game. */
     body { margin: 0; background: var(--bg); color: var(--text);
-           font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
-    main { margin: 0 auto; padding: 8px 10px 16px; }
-    .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 6px; }
-    .topbar .run { margin: 0 0 0 auto; }
+           font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 10px 12px 16px; }
     h1 { margin: 0; font-size: 17px; letter-spacing: -0.02em; cursor: default; }
     h1 span { color: var(--accent); }
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-            padding: 10px; margin-bottom: 8px; }
-    .card h2 { margin: 0 0 6px; font-size: 13px; }
-    .card h3 { margin: 10px 0 4px; font-size: 12px; }
-    label { display: block; font-weight: 600; font-size: 12px; margin: 6px 0 3px; }
-    label:first-of-type { margin-top: 0; }
-    textarea { resize: vertical; }
-    input, textarea { width: 100%; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border);
-            background: var(--bg); color: var(--text); font: inherit; }
-    .hint { color: var(--muted); font-size: 11px; margin: 3px 0 0; }
-    button { margin-top: 8px; padding: 5px 12px; border: 0; border-radius: 6px; background: var(--accent);
-             color: var(--accent-text); font: inherit; font-weight: 600; cursor: pointer; }
-    button:disabled { opacity: 0.6; cursor: wait; }
-    .tabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--code-bg); }
-    .tabs button { margin: 0; padding: 3px 10px; background: transparent; color: var(--muted); font-weight: 600; }
-    .tabs button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
-    .running { margin-top: 6px; }
-    .banner { padding: 6px 8px; border-radius: 6px; font-size: 12px; margin-bottom: 8px; }
-    .warn { background: var(--warn-bg); color: var(--warn-text); }
-    .error { background: var(--error-bg); color: var(--error-text); }
-    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 4px; margin-bottom: 6px; }
-    .stat { border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; }
-    .stat b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
-    .stat small { color: var(--muted); font-size: 11px; }
-    .pass { display: grid; grid-template-columns: 110px 1fr 52px; gap: 6px; align-items: center;
-            font-size: 12px; margin: 2px 0; }
-    .pass .track { background: var(--code-bg); border-radius: 3px; height: 8px; }
-    .pass .fill { background: var(--bar); border-radius: 3px; height: 8px; }
-    .pass .ms { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+    h2 { margin: 0; font-size: 14px; }
+    h3 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
     code, pre { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
-    pre { background: var(--code-bg); padding: 6px 8px; border-radius: 6px; overflow-x: auto; margin: 4px 0 0; }
-    .change { font-size: 13px; margin: 2px 0; }
-    .reason { margin: 6px 0; }
+    p { margin: 0; }
     .muted { color: var(--muted); }
-    footer { color: var(--muted); font-size: 11px; text-align: center; margin-top: 8px; }
+    .hint { color: var(--muted); font-size: 11.5px; margin-top: 4px; }
+    .wrap { overflow-wrap: anywhere; }  /* long paths and setting names break instead of overflowing */
 
-    /* Bottleneck verdict */
-    .verdict { font-size: 16px; font-weight: 700; margin: 0 0 2px; }
-    .verdict-sub { color: var(--muted); margin: 0 0 8px; font-size: 12px; }
-    .thread { display: grid; grid-template-columns: 110px 1fr 92px; gap: 6px; align-items: center;
-              font-size: 12px; margin: 3px 0; }
-    .thread .track { position: relative; background: var(--code-bg); border-radius: 3px; height: 10px; }
-    .thread .fill { border-radius: 3px; height: 10px; }
-    .thread .ms { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .card-head .muted { font-size: 12px; text-align: right; }
+
+    /* ---------- Controls */
+    button { padding: 6px 12px; border: 0; border-radius: 7px; background: var(--accent); color: var(--accent-text);
+             font: inherit; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    button.secondary { background: var(--soft); color: var(--text); }
+    button.link { background: none; color: var(--muted); padding: 2px 0; font-weight: 500; text-decoration: underline; }
+    button.primary { width: 100%; margin-top: 14px; padding: 9px; font-size: 14px; }
+    input, textarea { width: 100%; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border);
+                      background: var(--bg); color: var(--text); font: inherit; }
+    textarea { resize: vertical; }
+    input[type=range] { padding: 0; border: 0; background: none; accent-color: var(--accent); margin: 4px 0 0; }
+    label { font-weight: 600; font-size: 12.5px; }
+    .field { margin-top: 12px; }
+    .field:first-child { margin-top: 0; }
+    .field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+    .field-head .note { color: var(--muted); font-size: 12px; text-align: right; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .row input[type=number] { width: 70px; }
+
+    /* ---------- Top bar + project line */
+    .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .topbar .run { margin-left: auto; }
+    .tabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--soft); }
+    .tabs button { padding: 3px 10px; background: transparent; color: var(--muted); }
+    .tabs button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    .project { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+    .project .info { min-width: 0; flex: 1; }
+    .project .info div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ---------- Banners, status, log */
+    .banner { padding: 8px 10px; border-radius: 8px; font-size: 12.5px; margin-bottom: 10px; }
+    .warn { background: var(--warn-bg); color: var(--warn-text); }
+    .error { background: var(--bad-bg); color: var(--bad); }
+    .status { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; padding: 8px 10px;
+              background: var(--soft); border-radius: 8px; font-size: 12.5px; }
+    .pulse { flex: none; width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--accent);
+             animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: 0.25; } }
+    details > summary { cursor: pointer; color: var(--muted); }
+    details.log { margin-top: 8px; font-size: 12px; }
+    pre { background: var(--soft); padding: 8px; border-radius: 8px; margin: 6px 0 0; max-height: 260px; overflow: auto;
+          white-space: pre-wrap; overflow-wrap: anywhere; }
+
+    /* ---------- Result */
+    .hero { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+    .hero-fps { font-size: 26px; font-weight: 750; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+    .hero-fps small { font-size: 14px; font-weight: 600; color: var(--muted); }
+    .sub { color: var(--muted); font-size: 12px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 650; white-space: nowrap; }
+    .badge.good { background: var(--good-bg); color: var(--good); }
+    .badge.bad { background: var(--bad-bg); color: var(--bad); }
+    .badge.info { background: var(--info-bg); color: var(--info); }
+    .badge.neutral { background: var(--soft); color: var(--muted); }
+    .apply-row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--border);
+                 font-variant-numeric: tabular-nums; }
+    .apply-row:last-child { border-bottom: 0; }
+    .apply-row code { min-width: 0; overflow-wrap: anywhere; }
+    .apply-row span { flex: none; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+
+    /* Round cards: one compact card per experiment, tap to see settings and the AI's reason. */
+    details.round { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; }
+    details.round > summary { list-style: none; display: grid; grid-template-columns: auto auto 1fr; align-items: center;
+                              gap: 2px 8px; padding: 7px 10px; color: var(--text); }
+    details.round > summary::-webkit-details-marker { display: none; }
+    details.round[open] > summary { border-bottom: 1px solid var(--border); }
+    .round-name { font-weight: 650; }
+    .round-fps { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .round-preview { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px;
+                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .round-body { padding: 8px 10px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+    .chip { background: var(--soft); border-radius: 5px; padding: 1px 6px; font-size: 11.5px; overflow-wrap: anywhere; }
+
+    /* ---------- Measurements */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 6px; }
+    .stat { background: var(--soft); border-radius: 8px; padding: 6px 8px; }
+    .stat b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+    .stat small { color: var(--muted); font-size: 11px; }
+    .verdict { font-size: 17px; font-weight: 750; }
+    /* A meter: label and value on one line, full-width bar below, so long names never collide with the bar. */
+    .meter { margin: 7px 0; }
+    .meter-top { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+    .meter-top .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .meter-top .value { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .track { background: var(--soft); border-radius: 4px; height: 8px; margin-top: 3px; }
+    .fill { border-radius: 4px; height: 8px; }
     .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
-    .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--muted); margin: 0 0 6px; }
-    .legend .line-key { display: inline-block; width: 16px; height: 2px; margin-right: 6px; vertical-align: 4px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+    .legend .line-key { display: inline-block; width: 14px; height: 2px; margin-right: 5px; vertical-align: 4px; }
+    .split { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
+    .split div { height: 100%; }
 
-    /* Frame-time chart */
+    /* Frame-time chart: drawn at the real width of its box, so its text stays readable in a narrow window. */
     .chart { position: relative; }
-    .chart svg { display: block; width: 100%; height: auto; touch-action: none; }
+    .chart svg { display: block; width: 100%; touch-action: none; }
     .chart text { fill: var(--muted); font-size: 11px; font-family: inherit; }
     .tooltip { position: absolute; top: 4px; pointer-events: none; background: var(--card); border: 1px solid var(--border);
-               border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
+               border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.15);
                white-space: nowrap; font-variant-numeric: tabular-nums; }
     .tooltip b { display: block; margin-bottom: 2px; }
 
-    /* "Who limited each frame" split bar */
-    .split { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; }
-    .split div { height: 100%; }
-    .split div:first-child { border-radius: 4px 0 0 4px; }
-    .split div:last-child { border-radius: 0 4px 4px 0; }
-    .project { display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
-    .project span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .project button { margin: 0 0 0 auto; padding: 2px 10px; }
-    details { margin-top: 6px; font-size: 12px; }
-    summary { cursor: pointer; color: var(--muted); }
-    table { border-collapse: collapse; margin-top: 6px; font-variant-numeric: tabular-nums; }
-    th, td { text-align: left; padding: 3px 14px 3px 0; border-bottom: 1px solid var(--border); }
-    /* Only stack the bars on very narrow windows; the default side window is ~420px. */
-    @media (max-width: 360px) {
-      .pass { grid-template-columns: 90px 1fr 44px; }
-      .thread { grid-template-columns: 1fr 96px; }
-      .thread .track { grid-column: 1 / -1; grid-row: 2; }
-    }
+    footer { color: var(--muted); font-size: 11px; text-align: center; margin-top: 6px; }
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <!-- React replaces this message as soon as the page starts. If it stays, the scripts above didn't load. -->
+  <div id="root"><main><div class="banner warn">
+    Loading FrameOptimizer… If this message stays, the page couldn't download React from cdnjs.cloudflare.com.
+    Check your internet connection, then reload (F5).
+  </div></main></div>
 
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
@@ -127,10 +171,13 @@
     // Plain-English advice for each kind of bottleneck.
     const ADVICE = {
       gpu: "The GPU finishes last. Graphics settings (resolution, shadows, post-processing) should help.",
-      render: "The render thread finishes last: too many draw calls or objects. Lowering pixel-heavy settings won't help much.",
+      render: "The render thread finishes last: too many draw calls or objects. Settings that draw fewer objects help most.",
       game: "Game logic finishes last (AI, physics, Blueprints). Graphics settings won't help much.",
-      mixed: "Two parts are almost tied. Improving only one of them will give a small gain.",
+      mixed: "Two parts are almost tied. Improving only one of them gives a small gain.",
     };
+
+    const signed = pct => `${pct > 0 ? "+" : ""}${pct}%`;
+    const fileName = path => path.split(/[\\/]/).pop();
 
     async function postJson(url, body) {
       const response = await fetch(url, {
@@ -179,37 +226,45 @@
 
       // Project already set: one compact line.
       if (config && !editing) {
-        const name = config.project.split("/").pop().replace(/\.uproject$/i, "");
+        const name = fileName(config.project).replace(/\.uproject$/i, "");
         const version = (config.unreal_exe.match(/UE_([^/]+)/) || [])[1];
-        const details = `${version ? `UE ${version} · ` : ""}${config.map || "default map"}`;
         return (
           <div className="card project" title={config.project}>
-            <b>{name}</b> <span className="muted">✓ {details}</span>
-            <button onClick={change} disabled={disabled}>Change</button>
+            <div className="info">
+              <div><b>{name}</b> <span className="muted">{version ? `· UE ${version}` : ""}</span></div>
+              <div className="muted" style={{ fontSize: 12 }}>{config.map || "default map"}</div>
+            </div>
+            <button className="secondary" onClick={change} disabled={disabled}>Change</button>
           </div>
         );
       }
 
       return (
         <div className="card">
-          <h2>Unreal project</h2>
-          <label htmlFor="uproject">Path to your .uproject file</label>
-          <input id="uproject" value={uproject} onChange={e => setUproject(e.target.value)}
-                 placeholder="e.g. C:/UnrealProjects/StackOBot/StackOBot.uproject" />
-          <div className="hint">Tip: in File Explorer, right-click the .uproject file and choose "Copy as path".</div>
-          <details>
+          <div className="card-head"><h2>Unreal project</h2></div>
+          <div className="field">
+            <label htmlFor="uproject">Path to your .uproject file</label>
+            <input id="uproject" value={uproject} onChange={e => setUproject(e.target.value)}
+                   placeholder="C:/UnrealProjects/MyGame/MyGame.uproject" />
+            <div className="hint">In File Explorer: right-click the .uproject file → "Copy as path".</div>
+          </div>
+          <details className="field">
             <summary>More options</summary>
-            <label htmlFor="map">Benchmark map (blank = the project's default map)</label>
-            <input id="map" value={mapName} onChange={e => setMapName(e.target.value)} placeholder="/Game/Maps/Benchmark" />
-            <label htmlFor="exe">UnrealEditor.exe (blank = find it automatically)</label>
-            <input id="exe" value={exe} onChange={e => setExe(e.target.value)}
-                   placeholder="C:/Program Files/Epic Games/UE_5.5/Engine/Binaries/Win64/UnrealEditor.exe" />
+            <div className="field">
+              <label htmlFor="map">Benchmark map</label>
+              <input id="map" value={mapName} onChange={e => setMapName(e.target.value)}
+                     placeholder="blank = the project's default map" />
+            </div>
+            <div className="field">
+              <label htmlFor="exe">UnrealEditor.exe</label>
+              <input id="exe" value={exe} onChange={e => setExe(e.target.value)} placeholder="blank = find it automatically" />
+            </div>
           </details>
-          {error && <div className="banner error" style={{ margin: "6px 0 0" }}>{error}</div>}
-          <button onClick={save} disabled={saving || disabled || !uproject.trim()}>
-            {saving ? "Checking…" : "Save"}
-          </button>{" "}
-          {config && <button onClick={() => setEditing(false)} disabled={saving}>Cancel</button>}
+          {error && <div className="banner error wrap" style={{ margin: "10px 0 0" }}>{error}</div>}
+          <div className="actions">
+            <button onClick={save} disabled={saving || disabled || !uproject.trim()}>{saving ? "Checking…" : "Save"}</button>
+            {config && <button className="secondary" onClick={() => setEditing(false)} disabled={saving}>Cancel</button>}
+          </div>
         </div>
       );
     }
@@ -221,14 +276,16 @@
       const [csvPath, setCsvPath] = useState("");
       const [busy, setBusy] = useState("");  // "", "analyze", "benchmark" or "optimize"
       const [error, setError] = useState("");
-      const [note, setNote] = useState("");
+      const [note, setNote] = useState("");  // shown when there is nothing to measure yet
       const [summary, setSummary] = useState(null);
+      const [summaryLabel, setSummaryLabel] = useState("");  // what the Measurements card is showing
       const [rounds, setRounds] = useState(3);
       const [goal, setGoal] = useState("");  // the developer's direction for the AI (optional)
       const [freedom, setFreedom] = useState(50);  // Quality freedom slider: how far down each setting the AI may go
       const [frames, setFrames] = useState(1200);  // Test length slider: frames recorded per Unreal run
       const [progress, setProgress] = useState([]);  // status lines from the running optimize loop
       const [result, setResult] = useState(null);    // what the optimize loop found
+      const [formOpen, setFormOpen] = useState(true);  // the Optimize form folds away once a result is shown
 
       // On startup: rejoin a running optimize, or show the last result, or Unreal's newest capture.
       useEffect(() => {
@@ -247,20 +304,21 @@
         const d = await fetch("/api/latest-csv").then(r => r.json());
         if (d.csv_path) {
           setCsvPath(d.csv_path);
-          setNote(`Showing Unreal's newest capture: ${d.csv_path}`);
-          analyze(d.csv_path);
+          setNote("");
+          analyze(d.csv_path, `Newest capture · ${fileName(d.csv_path)}`);
         } else {
           setNote(d.note);
           setSummary(null);
         }
       }
 
-      async function analyze(path = csvPath) {
+      async function analyze(path = csvPath, label = `CSV · ${fileName(path)}`) {
         if (!path.trim()) return setError("Enter the path to a CSV file first.");
         setBusy("analyze"); setError("");
         try {
           const data = await postJson("/api/analyze", { csv_path: path });
           setSummary(data.summary);
+          setSummaryLabel(label);
         } catch (e) {
           setError(e.message);
         } finally {
@@ -274,7 +332,7 @@
           const data = await postJson("/api/benchmark", {});
           setCsvPath(data.csv_path);
           setSummary(data.summary);
-          setNote("Fresh capture from Unreal.");
+          setSummaryLabel("Fresh benchmark · starting settings");
         } catch (e) {
           setError(e.message);
         } finally {
@@ -284,10 +342,9 @@
 
       // The full loop: the server runs it in the background and we ask for its progress every second.
       async function optimize() {
-        setBusy("optimize"); setError(""); setResult(null); setProgress([]);
+        setBusy("optimize"); setError(""); setResult(null); setProgress([]); setFormOpen(true);
         try {
-          await postJson("/api/optimize", { api_key: apiKey, rounds: Number(rounds), goal, freedom: Number(freedom),
-                                          frames: Number(frames) });
+          await postJson("/api/optimize", { api_key: apiKey, rounds: Number(rounds), goal, freedom, frames });
           await watchOptimize();
         } catch (e) {
           setError(e.message);
@@ -312,12 +369,15 @@
       function showResult(found) {
         setResult(found);
         setSummary(found.best);
-        setNote("Charts below show the best run of the last optimization.");
+        setSummaryLabel("Best run of the last optimization");
+        setFormOpen(false);
       }
+
+      const showResultCard = source === "unreal" && result;
 
       return (
         <main>
-          {/* One-row header: name, measurement source, and the main action. */}
+          {/* One-row header: name, measurement source, and the quick action for that source. */}
           <div className="topbar">
             <h1 title="The AI suggests. Measurements decide. The developer approves.">Frame<span>Optimizer</span></h1>
             <div className="tabs" role="tablist" aria-label="Measurement source">
@@ -328,7 +388,7 @@
             </div>
             {source === "unreal" ? (
               <button className="run" onClick={benchmark} disabled={!!busy}
-                      title="Launches Unreal with the baseline settings, records the benchmark scene, and analyzes the capture. Uses the Unreal project set below.">
+                      title="Launches Unreal with the starting settings, records the scene once, and shows the measurements.">
                 {busy === "benchmark" ? "Running…" : "▶ Benchmark"}
               </button>
             ) : (
@@ -339,85 +399,123 @@
           </div>
 
           {source === "unreal" && <ProjectCard disabled={!!busy} onSaved={() => showLatestCapture().catch(() => {})} />}
+          {source === "csv" && (
+            <div className="card">
+              <label htmlFor="csv">Unreal CSV profile</label>
+              <input id="csv" value={csvPath} onChange={e => setCsvPath(e.target.value)}
+                     placeholder="C:/Games/MyGame/Saved/Profiling/CSV/capture.csv" />
+            </div>
+          )}
 
-          <div style={{ marginBottom: 8 }}>
-            {source === "csv" && (
-              <input id="csv" aria-label="Path to an Unreal CSV profile" value={csvPath}
-                     placeholder="Path to Unreal CSV, e.g. C:/Games/MyGame/Saved/Profiling/CSV/capture.csv"
-                     onChange={e => setCsvPath(e.target.value)} />
-            )}
-            {note && <p className="hint" title={note}
-                        style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{note}</p>}
-            {busy === "benchmark" && (
-              <div className="banner warn running">
-                Unreal is running the benchmark scene with the baseline settings.
-                Leave the Unreal window alone until it closes.
-              </div>
-            )}
-          </div>
+          {error && <div className="banner error wrap">{error}</div>}
+          {busy === "benchmark" && (
+            <div className="banner warn">Unreal is recording the scene with the starting settings. Leave its window alone until it closes.</div>
+          )}
 
-          {error && <div className="banner error">{error}</div>}
+          {showResultCard && <Result result={result} />}
 
           {/* Optimize always runs in Unreal, so it is only offered on the Unreal tab. */}
-          {source === "unreal" && <div className="card">
-            <h2>Optimize</h2>
-            <p className="hint" style={{ margin: "0 0 6px" }}>
-              Measures the baseline in Unreal. Then, each round, the AI proposes one approved change,
-              Unreal tests it, and only measured improvements are kept.
-            </p>
-            <label htmlFor="key">Anthropic API key</label>
-            <input id="key" type="password" autoComplete="off" placeholder="sk-ant-..."
-                   value={apiKey} onChange={e => setApiKey(e.target.value)} />
-            <div className="hint">Kept in this page's memory only and sent to your local server. Never saved.</div>
-            <label htmlFor="rounds">Rounds (1 to 10, one Unreal run each)</label>
-            <input id="rounds" type="number" min="1" max="10" value={rounds} style={{ width: 70 }}
-                   onChange={e => setRounds(e.target.value)} />
-            <label htmlFor="goal">Direction for the AI (optional)</label>
-            <textarea id="goal" rows="2" maxLength={500} value={goal} onChange={e => setGoal(e.target.value)}
-                      placeholder={'e.g. "Moody horror scene: keep shadows and fog. Aim for 60 FPS." or "Competitive: max FPS, blur and fog don\'t matter."'} />
-            <div className="hint">Steers which approved settings the AI tries. It can't unlock anything outside the allowlist.</div>
-            <label htmlFor="freedom">Quality freedom: {freedom}%</label>
-            <input id="freedom" type="range" min="0" max="100" step="5" value={freedom}
-                   onChange={e => setFreedom(e.target.value)} style={{ width: "100%" }} />
-            <div className="hint">
-              {freedom == 0 ? "Preserve graphics: nothing may be lowered."
-                : freedom < 50 ? "Small reductions only."
-                : freedom < 100 ? "Big reductions allowed: lighting, foliage, resolution, effects."
-                : "Potato allowed: anything in the allowlist can go to its lowest value."}
-              {" "}First runs a potato test (everything at its lowest allowed value) to show the most FPS settings can buy.
+          {source === "unreal" && (
+            <div className="card">
+              <div className="card-head">
+                <h2>{result && !formOpen ? "Run another optimization" : "Optimize"}</h2>
+                {result && !busy && (
+                  <button className="link" onClick={() => setFormOpen(!formOpen)}>{formOpen ? "Hide" : "Show"}</button>
+                )}
+              </div>
+              {formOpen && (
+                <OptimizeForm {...{ apiKey, setApiKey, rounds, setRounds, goal, setGoal, freedom, setFreedom,
+                                    frames, setFrames, busy, optimize }} />
+              )}
+              <Progress lines={progress} running={busy === "optimize"} />
             </div>
-            <label htmlFor="frames">Test length: {frames} frames per run</label>
-            <input id="frames" type="range" min="600" max="3600" step="300" value={frames}
-                   onChange={e => setFrames(e.target.value)} style={{ width: "100%" }} />
-            <div className="hint">
-              ≈ {Math.round(frames / 100)} s per run at 100 FPS. Longer = less noisy numbers, but slower. The first 60 frames are skipped as warm-up.
-            </div>
-            <div>
-              <button onClick={optimize} disabled={!!busy}>
-                {busy === "optimize" ? "Optimizing…" : "▶ Optimize"}
-              </button>
-            </div>
-            {busy === "optimize" && (
-              <p className="hint">Unreal opens and closes once per run. Leave its window alone.</p>
-            )}
-            {progress.length > 0 && <pre>{progress.join("\n")}</pre>}
-          </div>}
+          )}
 
-          {source === "unreal" && result && <Result result={result} />}
-          {summary && <Measurements summary={summary} />}
+          {summary && <Measurements summary={summary} label={summaryLabel}
+                                    compact={showResultCard && summary === result.best} />}
+          {!summary && note && <div className="card muted wrap">{note}</div>}
 
-          <footer>Runs locally at 127.0.0.1. Your Unreal project only changes when you click Apply.</footer>
+          <footer>Runs locally at 127.0.0.1 · Your Unreal project only changes when you click Apply.</footer>
         </main>
       );
     }
 
-    // What the optimize loop found: start vs best, every round, and the settings to apply.
+    function OptimizeForm({ apiKey, setApiKey, rounds, setRounds, goal, setGoal, freedom, setFreedom,
+                            frames, setFrames, busy, optimize }) {
+      const freedomText = freedom === 0 ? "Preserve graphics"
+        : freedom < 50 ? "Small reductions"
+        : freedom < 100 ? "Big reductions" : "Potato allowed";
+      return (
+        <>
+          <p className="muted" style={{ marginBottom: 12 }}>
+            The AI proposes approved settings, Unreal measures each one, and only real improvements are kept.
+          </p>
+          <div className="field">
+            <div className="field-head"><label htmlFor="key">Anthropic API key</label><span className="note">never saved</span></div>
+            <input id="key" type="password" autoComplete="off" placeholder="sk-ant-..."
+                   value={apiKey} onChange={e => setApiKey(e.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="goal">Direction for the AI <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+            <textarea id="goal" rows="2" maxLength={500} value={goal} onChange={e => setGoal(e.target.value)}
+                      placeholder={'"Hit 150 FPS" or "Keep shadows and fog, aim for 60 FPS"'} />
+          </div>
+          <div className="field">
+            <div className="field-head"><label htmlFor="freedom">Quality freedom</label>
+              <span className="note"><b>{freedom}%</b> · {freedomText}</span></div>
+            <input id="freedom" type="range" min="0" max="100" step="5" value={freedom}
+                   onChange={e => setFreedom(Number(e.target.value))} />
+            <div className="hint">
+              How far down each setting may go.{freedom > 0 && " A potato test (everything at its lowest allowed value) runs first to show the most FPS settings can buy."}
+            </div>
+          </div>
+          <div className="field">
+            <div className="field-head"><label htmlFor="frames">Test length</label>
+              <span className="note"><b>{frames}</b> frames · ≈ {Math.round(frames / 100)} s at 100 FPS</span></div>
+            <input id="frames" type="range" min="600" max="3600" step="300" value={frames}
+                   onChange={e => setFrames(Number(e.target.value))} />
+            <div className="hint">Longer runs give steadier numbers but take longer.</div>
+          </div>
+          <div className="field row">
+            <label htmlFor="rounds">AI rounds <span className="muted" style={{ fontWeight: 400 }}>(one Unreal run each)</span></label>
+            <input id="rounds" type="number" min="1" max="10" value={rounds} onChange={e => setRounds(e.target.value)} />
+          </div>
+          <button className="primary" onClick={optimize} disabled={!!busy}>
+            {busy === "optimize" ? "Optimizing…" : "▶ Optimize"}
+          </button>
+        </>
+      );
+    }
+
+    // While running: the current step, live. Afterwards (or anytime): the full log, folded away.
+    function Progress({ lines, running }) {
+      if (!lines.length) return null;
+      return (
+        <>
+          {running && (
+            <div className="status wrap"><span className="pulse" />
+              <span>{lines[lines.length - 1]}<br /><span className="muted">Unreal opens and closes once per run. Leave its window alone.</span></span>
+            </div>
+          )}
+          <details className="log">
+            <summary>Run log ({lines.length} lines)</summary>
+            <pre>{lines.join("\n")}</pre>
+          </details>
+        </>
+      );
+    }
+
+    // What the optimize loop found: the headline first, then what to apply, then every round.
     function Result({ result }) {
       const { start, best, total, rounds } = result;
       const changed = Object.entries(result.changes);
-      const signed = pct => `${pct > 0 ? "+" : ""}${pct}%`;
+      const fpsGain = Math.round((best.median_fps / start.median_fps - 1) * 1000) / 10;
+      const [showAll, setShowAll] = useState(false);
       const [applyMsg, setApplyMsg] = useState("");    // what happened after Apply / Undo
       const [applied, setApplied] = useState(false);   // shows the Undo button after a successful Apply
+      const shown = showAll ? changed : changed.slice(0, 6);
+      const runInfo = [result.freedom != null && `Quality freedom ${result.freedom}%`, result.frames && `${result.frames} frames per run`,
+                       `${rounds.length} test${rounds.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
 
       async function applyToProject() {
         if (!window.confirm("Write these settings into your project's Config/DefaultEngine.ini?\nA backup is made first, and Undo restores it.")) return;
@@ -442,93 +540,114 @@
 
       return (
         <div className="card">
-          <h2>Result: {total.verdict}</h2>
-          {result.goal && <p className="hint" style={{ margin: "0 0 6px" }}>Your direction: “{result.goal}”</p>}
-          {result.freedom != null && <p className="hint" style={{ margin: "0 0 6px" }}>
-            Quality freedom: {result.freedom}% · Test length: {result.frames} frames</p>}
-          {changed.length === 0 && <p className="hint" style={{ margin: "0 0 6px" }}>
-            Nothing was kept, so baseline and result are the same. Each round's real numbers are in the table below.</p>}
-          <div className="stats">
-            <div className="stat"><b>{start.median_ms} → {best.median_ms} ms</b><small>median frame ({signed(total.median_change_pct)})</small></div>
-            <div className="stat"><b>{start.p95_ms} → {best.p95_ms} ms</b><small>p95 frame ({signed(total.p95_change_pct)})</small></div>
-            <div className="stat"><b>{start.median_fps} → {best.median_fps}</b><small>median FPS</small></div>
+          <div className="card-head"><h2>Result</h2></div>
+          <div className="hero">
+            <div className="hero-fps">{start.median_fps} → {best.median_fps} <small>FPS</small></div>
+            <span className={`badge ${total.verdict === "improved" ? "good" : total.verdict === "worse" ? "bad" : "neutral"}`}>
+              {changed.length ? `${signed(fpsGain)} FPS` : "nothing kept"}
+            </span>
           </div>
-          {result.stopped_early && <div className="banner warn">{result.stopped_early}</div>}
+          <p className="sub">Median frame {start.median_ms} → {best.median_ms} ms · p95 {start.p95_ms} → {best.p95_ms} ms</p>
+          <p className="sub">{runInfo}</p>
+          {result.goal && <p className="sub wrap">Your direction: “{result.goal}”</p>}
+          {result.stopped_early && <div className="banner warn wrap" style={{ margin: "10px 0 0" }}>{result.stopped_early}</div>}
 
-          <h3>Rounds</h3>
-          <table>
-            <thead><tr><th>#</th><th>Change</th><th>FPS (before → after)</th><th>Median frame</th><th>Verdict</th></tr></thead>
-            <tbody>
-              {rounds.map(r => (
-                <tr key={r.round} title={r.experiment.reason}>
-                  <td>{r.potato ? "Potato" : r.round}</td>
-                  <td>{Object.entries(r.experiment.settings).map(([s, v]) => `${s}=${v}`).join(", ")}</td>
-                  <td>{r.before ? `${r.before.median_fps} → ${r.after.median_fps}` : ""}</td>
-                  <td>{r.before ? `${r.before.median_ms} → ${r.after.median_ms} ms ` : ""}({signed(r.comparison.median_change_pct)})</td>
-                  <td>{r.comparison.verdict}, <b>{r.potato ? "ceiling test, not kept" : r.kept ? "kept" : "discarded"}</b></td>
-                </tr>
+          <h3>Settings to apply {changed.length > 0 && `(${changed.length})`}</h3>
+          {changed.length === 0 ? (
+            <p className="muted">No change gave a clear measured improvement, so the starting settings stay. Each test is listed below.</p>
+          ) : (
+            <>
+              {shown.map(([setting, value]) => (
+                <div className="apply-row" key={setting}>
+                  <code>{setting}</code><span>{result.start_settings[setting]} → <b>{value}</b></span>
+                </div>
               ))}
-            </tbody>
-          </table>
-          <p className="hint">Hover a row to read why the AI proposed it.</p>
-
-          <h3>Settings to apply</h3>
-          {changed.length === 0
-            ? <p className="muted" style={{ margin: 0 }}>No tested change gave a clear measured improvement. Keep the starting settings.</p>
-            : changed.map(([setting, value]) => (
-                <div className="change" key={setting}><code>{setting}</code>: {result.start_settings[setting]} → <b>{value}</b></div>
-              ))}
-          <p className="hint">You approve: check the visual trade-offs in the reports before applying.</p>
-          {changed.length > 0 && (
-            <div>
-              <button onClick={applyToProject} disabled={applied}>Apply to project</button>{" "}
-              {applied && <button onClick={undoApply}>Undo</button>}
-              {applyMsg && <p className="hint" style={{ wordBreak: "break-all" }}>{applyMsg}</p>}
-            </div>
+              {changed.length > 6 && (
+                <button className="link" onClick={() => setShowAll(!showAll)}>{showAll ? "Show fewer" : `Show all ${changed.length}`}</button>
+              )}
+              <div className="actions">
+                <button onClick={applyToProject} disabled={applied}>{applied ? "Applied ✓" : "Apply to project"}</button>
+                {applied && <button className="secondary" onClick={undoApply}>Undo</button>}
+              </div>
+              <p className="hint">You approve: check the visual trade-offs in Unreal (or the round reports) before applying.</p>
+              {applyMsg && <p className="hint wrap">{applyMsg}</p>}
+            </>
           )}
-          <p className="hint" title={result.summary_report}>Summary: <code>{result.summary_report}</code></p>
+
+          <h3>Tests</h3>
+          {rounds.map(r => <RoundCard r={r} key={r.round} />)}
+          <p className="hint wrap" title={result.summary_report}>Full report: <code>{result.summary_report}</code></p>
         </div>
       );
     }
 
-    function Measurements({ summary }) {
-      const passes = Object.entries(summary.gpu_passes).sort((a, b) => b[1] - a[1]);
-      const biggest = passes.length ? passes[0][1] : 1;
+    // One experiment: name, outcome badge and FPS on top; tap to see every setting and the AI's reason.
+    function RoundCard({ r }) {
+      const settings = Object.entries(r.experiment.settings);
+      const [badgeClass, badgeText] = r.potato ? ["info", "ceiling test"]
+        : r.kept ? ["good", "kept"]
+        : r.comparison.verdict === "worse" ? ["bad", "worse"] : ["neutral", "no clear gain"];
+      const preview = settings.slice(0, 3).map(([s, v]) => `${s}=${v}`).join(", ")
+        + (settings.length > 3 ? `, +${settings.length - 3} more` : "");
+      return (
+        <details className="round">
+          <summary>
+            <span className="round-name">{r.potato ? "Potato" : `#${r.round}`}</span>
+            <span className={`badge ${badgeClass}`}>{badgeText}</span>
+            <span className="round-fps">{r.before.median_fps} → <b>{r.after.median_fps}</b> FPS</span>
+            <span className="round-preview">{preview}</span>
+          </summary>
+          <div className="round-body">
+            <p className="sub">
+              Median frame {r.before.median_ms} → {r.after.median_ms} ms ({signed(r.comparison.median_change_pct)})
+              {r.potato && " · every setting at its lowest allowed value, never kept"}
+            </p>
+            <div className="chips">{settings.map(([s, v]) => <code className="chip" key={s}>{s}={v}</code>)}</div>
+            {r.experiment.reason && <p className="muted" style={{ fontSize: 12 }}>{r.experiment.reason}</p>}
+          </div>
+        </details>
+      );
+    }
 
+    // A labeled bar: name and value on one line, the bar underneath.
+    function Meter({ name, value, pct, color, title }) {
+      return (
+        <div className="meter" title={title || name}>
+          <div className="meter-top"><span className="name">{name}</span><span className="value">{value}</span></div>
+          <div className="track"><div className="fill" style={{ width: `${Math.min(100, pct)}%`, background: color }} /></div>
+        </div>
+      );
+    }
+
+    // compact = the Result card already shows this run's median/p95/FPS, so don't repeat them.
+    function Measurements({ summary, label, compact }) {
       return (
         <>
           <div className="card">
-            <h2>Measurements</h2>
-            <div className="stats">
-              <div className="stat"><b>{summary.median_ms} ms</b><small>median frame</small></div>
-              <div className="stat"><b>{summary.p95_ms} ms</b><small>p95 frame</small></div>
-              <div className="stat"><b>{summary.max_ms} ms</b><small>worst frame</small></div>
-              <div className="stat"><b>{summary.median_fps}</b><small>median FPS</small></div>
-            </div>
-            <p className="muted" style={{ margin: 0 }}>{summary.frames} frames analyzed (warm-up frames skipped).</p>
+            <div className="card-head"><h2>Measurements</h2><span className="muted wrap">{label}</span></div>
+            {!compact && (
+              <div className="stats" style={{ marginBottom: 6 }}>
+                <div className="stat"><b>{summary.median_fps}</b><small>median FPS</small></div>
+                <div className="stat"><b>{summary.median_ms}</b><small>median ms</small></div>
+                <div className="stat"><b>{summary.p95_ms}</b><small>p95 ms</small></div>
+                <div className="stat"><b>{summary.max_ms}</b><small>worst ms</small></div>
+              </div>
+            )}
+            <p className="muted" style={{ fontSize: 12 }}>
+              {summary.frames} frames analyzed (warm-up skipped){compact && ` · worst frame ${summary.max_ms} ms`}
+            </p>
           </div>
 
           {summary.bottleneck
             ? <Bottleneck bottleneck={summary.bottleneck} frameMs={summary.median_ms} timeline={summary.timeline} />
             : <div className="card muted">This CSV has no GameThreadTime / RenderThreadTime / GPUTime columns, so the bottleneck can't be measured.</div>}
 
-          {passes.length > 0 && (
-            <div className="card">
-              <h2>GPU passes: where the GPU time goes</h2>
-              {passes.map(([name, ms]) => (
-                <div className="pass" key={name}>
-                  <span>{name.replace("GPU/", "")}</span>
-                  <div className="track"><div className="fill" style={{ width: `${(ms / biggest) * 100}%` }} /></div>
-                  <span className="ms">{ms} ms</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <GpuPasses passes={summary.gpu_passes} />
         </>
       );
     }
 
-    // Visual 1 + 3: the verdict, the per-part bars, and the "who limited each frame" split.
+    // The verdict, one bar per engine part, the frame-time chart, and who limited each frame.
     function Bottleneck({ bottleneck, frameMs, timeline }) {
       const parts = PARTS.filter(p => p.key in bottleneck.median_ms);
       const headline = bottleneck.bound === "mixed" ? bottleneck.label
@@ -536,31 +655,21 @@
 
       return (
         <div className="card">
-          <h2>CPU or GPU bottleneck?</h2>
+          <div className="card-head"><h2>Bottleneck</h2><span className="muted">{frameMs} ms median frame</span></div>
           <p className="verdict">{headline}</p>
-          <p className="verdict-sub">
-            {ADVICE[bottleneck.bound]} The slowest part takes {bottleneck.share_of_frame_pct}% of the {frameMs} ms median frame.
-          </p>
+          <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>{ADVICE[bottleneck.bound]}</p>
 
           {parts.map(p => {
             const ms = bottleneck.median_ms[p.key];
-            const pct = Math.min(100, (ms / frameMs) * 100);
-            return (
-              <div className="thread" key={p.key}>
-                <span><span className="swatch" style={{ background: p.color }} />{p.name}</span>
-                <div className="track" title={`${p.name}: ${ms} ms median`}>
-                  <div className="fill" style={{ width: `${pct}%`, background: p.color }} />
-                </div>
-                <span className="ms">{ms} ms · {Math.round(pct)}%</span>
-              </div>
-            );
+            const pct = (ms / frameMs) * 100;
+            return <Meter key={p.key} name={p.name} value={`${ms} ms · ${Math.round(pct)}%`} pct={pct} color={p.color} />;
           })}
-          <p className="hint">Bar length = median time ÷ median frame time. All three run in parallel, so the longest bar sets the frame rate.</p>
+          <p className="hint">All parts run in parallel: the longest bar sets the frame rate.</p>
 
-          <h3>Frame time over the capture (ms)</h3>
+          <h3>Frame time over the capture</h3>
           <FrameChart timeline={timeline} parts={parts} />
 
-          <h3>Which part was slowest, frame by frame</h3>
+          <h3>Slowest part, frame by frame</h3>
           <div className="split" role="img"
                aria-label={parts.map(p => `${p.name} ${bottleneck.frames_limited_pct[p.key]}%`).join(", ")}>
             {parts.filter(p => bottleneck.frames_limited_pct[p.key] > 0).map(p => (
@@ -568,45 +677,59 @@
                    style={{ width: `${bottleneck.frames_limited_pct[p.key]}%`, background: p.color }} />
             ))}
           </div>
-          <div className="legend" style={{ marginTop: 8 }}>
+          <div className="legend">
             {parts.map(p => (
               <span key={p.key}><span className="swatch" style={{ background: p.color }} />{p.name} <b style={{ color: "var(--text)" }}>{bottleneck.frames_limited_pct[p.key]}%</b></span>
             ))}
           </div>
-          <p className="hint">If this bar is split between parts, the bottleneck changes during gameplay. Check the chart above for where.</p>
-
-          <details>
-            <summary>Show as table</summary>
-            <table>
-              <thead><tr><th>Part</th><th>Median ms</th><th>% of frame</th><th>Slowest in % of frames</th></tr></thead>
-              <tbody>
-                {parts.map(p => (
-                  <tr key={p.key}>
-                    <td>{p.name}</td>
-                    <td>{bottleneck.median_ms[p.key]}</td>
-                    <td>{Math.round((bottleneck.median_ms[p.key] / frameMs) * 100)}%</td>
-                    <td>{bottleneck.frames_limited_pct[p.key]}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </details>
-          <p className="hint">Estimate from measured thread times. Unreal's GPU timing can overlap other work, so treat close calls with care.</p>
+          <p className="hint">Estimated from Unreal's thread timers, which can overlap. Treat close calls with care.</p>
         </div>
       );
     }
 
-    // Visual 2: line chart of frame time + each part, with a hover crosshair and tooltip.
+    // Biggest GPU passes first; the long tail of tiny passes is folded away.
+    function GpuPasses({ passes }) {
+      const sorted = Object.entries(passes).sort((a, b) => b[1] - a[1]);
+      if (!sorted.length) return null;
+      const biggest = sorted[0][1] || 1;
+      const top = sorted.slice(0, 8);
+      const rest = sorted.slice(8);
+      const row = ([name, ms]) => <Meter key={name} name={name.replace("GPU/", "")} value={`${ms} ms`}
+                                         pct={(ms / biggest) * 100} color="var(--s-pass)" />;
+      return (
+        <div className="card">
+          <div className="card-head"><h2>GPU passes</h2><span className="muted">where the GPU time goes</span></div>
+          {top.map(row)}
+          {rest.length > 0 && (
+            <details className="log">
+              <summary>All {sorted.length} passes</summary>
+              {rest.map(row)}
+            </details>
+          )}
+        </div>
+      );
+    }
+
+    // Line chart of frame time + each part, with a hover crosshair and tooltip.
     function FrameChart({ timeline, parts }) {
       const [hover, setHover] = useState(null);
+      const [W, setW] = useState(600);  // drawn at the real pixel width of its box (see the ResizeObserver)
+      const boxRef = useRef(null);
       const svgRef = useRef(null);
 
-      const W = 700, H = 240, left = 36, right = 10, top = 10, bottom = 26;
+      useEffect(() => {
+        const observer = new ResizeObserver(([entry]) => setW(Math.max(240, Math.round(entry.contentRect.width))));
+        observer.observe(boxRef.current);
+        return () => observer.disconnect();
+      }, []);
+
+      const H = Math.round(Math.min(240, Math.max(160, W * 0.45)));
+      const left = 34, right = 8, top = 8, bottom = 22;
       const plotW = W - left - right, plotH = H - top - bottom;
       const n = timeline.frame.length;
       const maxValue = Math.max(...timeline.frame, ...parts.flatMap(p => timeline[p.key]));
-      // Pick a round tick step that gives at most 6 labels, even when one hitch is thousands of ms.
-      const tickStep = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find(s => maxValue / s <= 6) || 10000;
+      // Pick a round tick step that gives at most 5 labels, even when one hitch is thousands of ms.
+      const tickStep = [2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find(s => maxValue / s <= 5) || 10000;
       const yMax = Math.max(tickStep, Math.ceil(maxValue / tickStep) * tickStep);
 
       const x = i => left + (n === 1 ? 0 : (i / (n - 1)) * plotW);
@@ -624,27 +747,27 @@
         setHover(Math.max(0, Math.min(n - 1, i)));
       }
 
-      const series = [{ key: "frame", name: "Frame time", color: "var(--s-frame)" }, ...parts];
+      const series = [{ key: "frame", name: "Frame", color: "var(--s-frame)" }, ...parts];
 
       return (
         <>
           <div className="legend">
             {series.map(s => (
-              <span key={s.key}><span className="line-key" style={{ background: s.color }} />{s.name}</span>
+              <span key={s.key}><span className="line-key" style={{ background: s.color }} />{s.name.replace(" (CPU)", "")}</span>
             ))}
-            <span><span className="line-key" style={{ borderTop: "2px dashed var(--muted)", height: 0 }} />60 FPS (16.7 ms)</span>
+            {target60 <= yMax && <span><span className="line-key" style={{ borderTop: "2px dashed var(--muted)", height: 0 }} />60 FPS</span>}
           </div>
-          <div className="chart">
-            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} onPointerMove={onMove} onPointerLeave={() => setHover(null)}
-                 role="img" aria-label="Line chart of frame time and per-part times across the capture">
+          <div className="chart" ref={boxRef}>
+            <svg ref={svgRef} width={W} height={H} viewBox={`0 0 ${W} ${H}`} onPointerMove={onMove} onPointerLeave={() => setHover(null)}
+                 role="img" aria-label="Line chart of frame time and per-part times across the capture, in milliseconds">
               {ticks.map(t => (
                 <g key={t}>
                   <line x1={left} x2={W - right} y1={y(t)} y2={y(t)} stroke="var(--grid)" strokeWidth="1" />
                   <text x={left - 6} y={y(t) + 4} textAnchor="end">{t}</text>
                 </g>
               ))}
-              <text x={left} y={H - 6}>start</text>
-              <text x={W - right} y={H - 6} textAnchor="end">end of capture</text>
+              <text x={left} y={H - 5}>start (ms ↑)</text>
+              <text x={W - right} y={H - 5} textAnchor="end">end</text>
 
               {target60 <= yMax && (
                 <line x1={left} x2={W - right} y1={y(target60)} y2={y(target60)}
@@ -652,17 +775,17 @@
               )}
 
               {parts.map(p => (
-                <path key={p.key} d={path(timeline[p.key])} fill="none" stroke={p.color} strokeWidth="2"
+                <path key={p.key} d={path(timeline[p.key])} fill="none" stroke={p.color} strokeWidth="1.5"
                       strokeLinejoin="round" strokeLinecap="round" />
               ))}
-              <path d={path(timeline.frame)} fill="none" stroke="var(--s-frame)" strokeWidth="2"
+              <path d={path(timeline.frame)} fill="none" stroke="var(--s-frame)" strokeWidth="1.5"
                     strokeLinejoin="round" strokeLinecap="round" />
 
               {hover !== null && (
                 <g>
                   <line x1={x(hover)} x2={x(hover)} y1={top} y2={top + plotH} stroke="var(--muted)" strokeWidth="1" />
                   {series.map(s => (
-                    <circle key={s.key} cx={x(hover)} cy={y(timeline[s.key][hover])} r="4"
+                    <circle key={s.key} cx={x(hover)} cy={y(timeline[s.key][hover])} r="3.5"
                             fill={s.color} stroke="var(--card)" strokeWidth="2" />
                   ))}
                 </g>
@@ -679,13 +802,13 @@
                 {series.map(s => (
                   <div key={s.key}>
                     <span className="swatch" style={{ background: s.color }} />
-                    {s.name}: {timeline[s.key][hover].toFixed(2)} ms
+                    {s.name.replace(" (CPU)", "")}: {timeline[s.key][hover].toFixed(2)} ms
                   </div>
                 ))}
               </div>
             )}
           </div>
-          <p className="hint">Hover to inspect a frame. The line that sits just under "Frame time" is the bottleneck. Spikes are hitches.</p>
+          <p className="hint">Hover to inspect a frame. The line just under "Frame" is the bottleneck; spikes are hitches.</p>
         </>
       );
     }
