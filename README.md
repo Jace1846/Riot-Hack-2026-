@@ -21,7 +21,7 @@ At the end you get a summary: start vs best, every round, and the settings to ap
 
 **Core rule:** the AI suggests. Measurements decide. The developer approves.
 
-Settings are passed to Unreal on the command line for each run only, so nothing in your Unreal project is changed.
+Settings are passed to Unreal on the command line for each run only. Your Unreal project is only changed when you click **Apply to project**, which backs up `Config/DefaultEngine.ini` first; **Undo** restores it.
 
 ## Setup
 
@@ -38,7 +38,7 @@ FrameOptimizer finds Unreal (from the engine version in the `.uproject`) and the
 by itself. Under **More options** you can pick a different map or point at `UnrealEditor.exe` manually.
 
 It saves this to `config.local.json` (ignored by Git, so your paths stay on your machine). Every run uses
-1920x1080 and records 600 frames, so measurements stay comparable.
+1920x1080 and records 1200 frames (the first 60 are skipped as warm-up), so measurements stay comparable.
 
 ## Usage
 
@@ -84,7 +84,6 @@ ui/             server.py (local web server) + index.html (the FrameOptimizer wi
 experiments/    allowlist.json (what may be changed) and baseline.json (starting settings)
 reports/        One folder per optimize run: summary.md plus a report per round
 tests/          pytest tests, one file per controller file; fixtures/ holds a hand-made test CSV
-unreal/         Unreal scene and setup notes
 ```
 
 ### Code map (in the order the loop runs)

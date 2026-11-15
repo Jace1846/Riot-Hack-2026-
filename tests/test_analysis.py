@@ -13,7 +13,7 @@ FIXTURE = Path(__file__).parent / "fixtures" / "sample.csv"
 def test_summary_of_fixture():
     summary = summarize_csv(FIXTURE)
 
-    assert summary["frames"] == 280  # 300 frames minus 20 warm-up (footer rows ignored)
+    assert summary["frames"] == 240  # 300 frames minus 60 warm-up (footer rows ignored)
     assert 13.5 < summary["median_ms"] < 14.5
     assert summary["p95_ms"] >= summary["median_ms"]
     assert summary["max_ms"] > 30  # a planted hitch survives
@@ -35,7 +35,7 @@ def test_csv_without_frametime_raises(tmp_path):
 
 def test_too_few_frames_raises(tmp_path):
     short = tmp_path / "short.csv"
-    short.write_text("FrameTime\n" + "14.0\n" * 25)  # only 5 left after warm-up
+    short.write_text("FrameTime\n" + "14.0\n" * 65)  # only 5 left after warm-up
     with pytest.raises(ValueError):
         summarize_csv(short)
 
@@ -53,7 +53,7 @@ def test_fixture_is_gpu_bound():
 
 def test_cpu_bound_game_thread(tmp_path):
     cpu = tmp_path / "cpu.csv"
-    cpu.write_text("FrameTime,GameThreadTime,RenderThreadTime,GPUTime\n" + "20.0,19.0,8.0,10.0\n" * 40)
+    cpu.write_text("FrameTime,GameThreadTime,RenderThreadTime,GPUTime\n" + "20.0,19.0,8.0,10.0\n" * 80)  # 20 left after warm-up
     bottleneck = summarize_csv(cpu)["bottleneck"]
 
     assert bottleneck["bound"] == "game"
@@ -62,13 +62,13 @@ def test_cpu_bound_game_thread(tmp_path):
 
 def test_near_tie_is_mixed(tmp_path):
     tie = tmp_path / "tie.csv"
-    tie.write_text("FrameTime,GameThreadTime,RenderThreadTime,GPUTime\n" + "16.0,5.0,15.0,15.5\n" * 40)
+    tie.write_text("FrameTime,GameThreadTime,RenderThreadTime,GPUTime\n" + "16.0,5.0,15.0,15.5\n" * 80)  # 20 left after warm-up
     assert summarize_csv(tie)["bottleneck"]["bound"] == "mixed"
 
 
 def test_no_thread_columns_gives_no_bottleneck(tmp_path):
     plain = tmp_path / "plain.csv"
-    plain.write_text("FrameTime\n" + "14.0\n" * 40)
+    plain.write_text("FrameTime\n" + "14.0\n" * 80)  # 20 left after warm-up
     summary = summarize_csv(plain)
 
     assert summary["bottleneck"] is None

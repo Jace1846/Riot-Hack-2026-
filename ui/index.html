@@ -387,7 +387,7 @@
           {source === "unreal" && result && <Result result={result} />}
           {summary && <Measurements summary={summary} />}
 
-          <footer>Runs locally at 127.0.0.1. Nothing in your Unreal project is changed.</footer>
+          <footer>Runs locally at 127.0.0.1. Your Unreal project only changes when you click Apply.</footer>
         </main>
       );
     }
@@ -395,7 +395,7 @@
     // What the optimize loop found: start vs best, every round, and the settings to apply.
     function Result({ result }) {
       const { start, best, total, rounds } = result;
-      const changed = Object.entries(result.best_settings).filter(([s, v]) => result.start_settings[s] !== v);
+      const changed = Object.entries(result.changes);
       const signed = pct => `${pct > 0 ? "+" : ""}${pct}%`;
       const [applyMsg, setApplyMsg] = useState("");    // what happened after Apply / Undo
       const [applied, setApplied] = useState(false);   // shows the Undo button after a successful Apply
@@ -581,8 +581,9 @@
       const plotW = W - left - right, plotH = H - top - bottom;
       const n = timeline.frame.length;
       const maxValue = Math.max(...timeline.frame, ...parts.flatMap(p => timeline[p.key]));
-      const yMax = Math.ceil(maxValue / 5) * 5;
-      const tickStep = yMax > 40 ? 10 : 5;
+      // Pick a round tick step that gives at most 6 labels, even when one hitch is thousands of ms.
+      const tickStep = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find(s => maxValue / s <= 6) || 10000;
+      const yMax = Math.max(tickStep, Math.ceil(maxValue / tickStep) * tickStep);
 
       const x = i => left + (n === 1 ? 0 : (i / (n - 1)) * plotW);
       const y = ms => top + plotH - (ms / yMax) * plotH;

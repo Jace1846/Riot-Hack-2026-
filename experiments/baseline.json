@@ -19,6 +19,9 @@
     "r.Nanite.MaxPixelsPerEdge": 1,
     "r.SkeletalMeshLODBias": 0,
     "r.ViewDistanceScale": 1.0,
-    "foliage.DensityScale": 1.0
+    "foliage.DensityScale": 1.0,
+    "r.Lumen.HardwareRayTracing": 1,
+    "r.Shadow.Virtual.Enable": 1,
+    "r.Lumen.Reflections.Allow": 1
   }
 }

@@ -37,7 +37,7 @@ BAD = {"name": "too_far", "reason": "test", "settings": [{"setting": "r.ScreenPe
 
 def test_prompt_contains_measurements_rules_and_history():
     prompt = build_prompt(SUMMARY, ALLOWLIST, BASELINE, TRIED)
-    assert "Median frame time: 14.1 ms" in prompt
+    assert "Median frame time: 14.09 ms" in prompt
     assert "GPU/ShadowDepths: 3.31" in prompt
     assert "r.Shadow.MaxResolution: allowed values [2048, 1024, 512]" in prompt
     assert "shadow_02: r.Shadow.MaxResolution=1024" in prompt

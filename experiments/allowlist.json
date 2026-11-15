@@ -70,5 +70,17 @@
   "foliage.DensityScale": {
     "values": [1.0, 0.75, 0.5],
     "quality_impact": "Low at 0.75, medium at 0.5 (CPU lever): sparser grass and plants"
+  },
+  "r.Lumen.HardwareRayTracing": {
+    "values": [1, 0],
+    "quality_impact": "Medium (CPU and GPU lever): Lumen switches from hardware ray tracing to cheaper software tracing; lighting and reflections get slightly less accurate"
+  },
+  "r.Shadow.Virtual.Enable": {
+    "values": [1, 0],
+    "quality_impact": "Medium (GPU lever): swaps Virtual Shadow Maps for older cascaded shadows; distant shadows get softer. The r.Shadow.MaxResolution and CSM settings only take effect when this is 0"
+  },
+  "r.Lumen.Reflections.Allow": {
+    "values": [1, 0],
+    "quality_impact": "Medium (GPU lever): turns off Lumen reflections; shiny surfaces fall back to simpler reflections"
   }
 }

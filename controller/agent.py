@@ -3,8 +3,8 @@
 Loop step: Agent (User -> *Agent* -> Validator -> Benchmark -> ...).
 Start reading at: propose_experiment().
 
-The agent only suggests. Its proposal is validated against the allowlist, then a human
-reviews the JSON file, and Unreal measurements decide whether it actually helped.
+The agent only suggests. Its proposal is validated against the allowlist, Unreal measurements
+decide whether it actually helped, and the developer decides whether to apply the result.
 """
 import json
 import re

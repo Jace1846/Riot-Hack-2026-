@@ -103,9 +103,13 @@ def capture_folder(config):
 def capture_finished(csv_path):
     """True once Unreal has written the whole capture: the last line is its metadata line, which starts with '['."""
     try:
-        lines = Path(csv_path).read_text(errors="ignore").strip().splitlines()
+        with open(csv_path, "rb") as f:
+            f.seek(0, 2)  # jump to the end: only the last few KB matter, not the whole 1-2 MB file
+            f.seek(max(0, f.tell() - 16384))
+            tail = f.read().decode(errors="ignore")
     except OSError:  # Unreal is still holding the file
         return False
+    lines = tail.strip().splitlines()
     return bool(lines) and lines[-1].startswith("[")
 
 

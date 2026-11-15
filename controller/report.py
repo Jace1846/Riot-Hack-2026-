@@ -90,12 +90,11 @@ def build_summary(result):
         lines += ["", f"**{result['stopped_early']}**"]
 
     lines += ["", "## Settings to apply", ""]
-    changed = {s: v for s, v in result["best_settings"].items() if result["start_settings"].get(s) != v}
-    if changed:
-        for setting, value in changed.items():
+    if result["changes"]:
+        for setting, value in result["changes"].items():
             lines.append(f"- `{setting}`: {result['start_settings'].get(setting)} → {value}")
         lines += ["", "FrameOptimizer has not changed your Unreal project. Check the visual trade-off in each "
-                      "round's report, then apply the settings you approve yourself."]
+                      "round's report, then click Apply to project in the window if you approve."]
     else:
         lines.append("No tested change gave a clear measured improvement. Keep the starting settings.")
 
@@ -141,6 +140,8 @@ def _bottleneck_section(before, after):
 
 
 def _row(label, before, after):
-    """One table row: label | before | after | % change."""
+    """One table row: label | before | after | % change. A 0 "before" has no % change (can't divide by 0)."""
+    if not before:
+        return f"| {label} | {before} | {after} | n/a |"
     change = (after - before) / before * 100
     return f"| {label} | {before} | {after} | {change:+.1f}% |"

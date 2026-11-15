@@ -122,7 +122,7 @@ def test_config_is_built_from_just_the_uproject(tmp_path):
     assert config["unreal_exe"] == exe.as_posix()
     assert config["project"] == project.as_posix()
     assert config["map"] == "/Game/Maps/Benchmark"
-    assert config["resolution"] == [1920, 1080] and config["frames"] == 600
+    assert config["resolution"] == [1920, 1080] and config["frames"] == 1200
 
 
 def test_typed_map_and_exe_override_the_detected_ones(tmp_path):

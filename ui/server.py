@@ -62,7 +62,9 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or "{}")
             routes[self.path](body)
         except (FileNotFoundError, ValueError, RuntimeError, KeyError) as error:
-            self._send_json(400, {"error": str(error)})
+            self._send_json(400, {"error": str(error)})  # expected problems, e.g. a missing file
+        except Exception as error:  # a bug: still tell the page, or it just shows "Request failed"
+            self._send_json(500, {"error": f"Unexpected error: {type(error).__name__}: {error}"})
 
     def _project(self, body):
         """Set the Unreal project from a pasted .uproject path. Finds Unreal and the map, then saves the config."""
@@ -114,11 +116,10 @@ class Handler(BaseHTTPRequestHandler):
         result = OPTIMIZE["result"]
         if OPTIMIZE["running"] or result is None:
             raise ValueError("Finish an Optimize run first.")
-        changed = {s: v for s, v in result["best_settings"].items() if result["start_settings"].get(s) != v}
         allowlist, _ = load_rules()
         ini = engine_ini(load_config())
-        backup = apply_settings(ini, changed, allowlist)
-        self._send_json(200, {"ini": str(ini), "backup": str(backup), "applied": changed})
+        backup = apply_settings(ini, result["changes"], allowlist)
+        self._send_json(200, {"ini": str(ini), "backup": str(backup), "applied": result["changes"]})
 
     def _undo_apply(self, body):
         """Restore DefaultEngine.ini from the newest FrameOptimizer backup."""
@@ -148,8 +149,8 @@ def run_optimize(rounds, config, api_key, goal=""):
     try:
         client = anthropic.Anthropic(api_key=api_key)
         OPTIMIZE["result"] = optimize(rounds, config, client=client, progress=OPTIMIZE["lines"].append, goal=goal)
-    except (FileNotFoundError, ValueError, RuntimeError, KeyError) as error:
-        OPTIMIZE["error"] = f"Optimize failed: {error}"
+    except Exception as error:  # any crash must reach the page, or it just shows "testing..." forever
+        OPTIMIZE["error"] = f"Optimize failed: {type(error).__name__}: {error}"
     finally:
         OPTIMIZE["running"] = False
         UNREAL_LOCK.release()
@@ -179,11 +180,17 @@ def open_window(url):
     webbrowser.open(url)
 
 
+class Server(ThreadingHTTPServer):
+    # Python's default (True) lets a second copy share port 8000 on Windows, and the page's
+    # requests then get split between both copies. False makes the second copy fail to start instead.
+    allow_reuse_address = False
+
+
 def start(open_app=True):
     """Start the server, open the window, and keep serving until Ctrl+C."""
     url = f"http://{HOST}:{PORT}"
     try:
-        server = ThreadingHTTPServer((HOST, PORT), Handler)  # bind first, so the page can load immediately
+        server = Server((HOST, PORT), Handler)  # bind first, so the page can load immediately
     except OSError:
         print(f"Port {PORT} is busy - FrameOptimizer is probably already running. Opening its window.")
         if open_app:

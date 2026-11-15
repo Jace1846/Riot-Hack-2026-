@@ -15,7 +15,7 @@ THREAD_LABELS = {"game": "Game thread (CPU)", "render": "Render thread (CPU)", "
 TIMELINE_POINTS = 200  # how many points the UI chart gets, so it stays fast
 
 
-def summarize_csv(path, skip_warmup=20):
+def summarize_csv(path, skip_warmup=60):
     """Read one Unreal CSV capture and return a summary dictionary (all times in ms)."""
     frame_times = []
     gpu_pass_times = {}  # e.g. {"GPU/ShadowDepths": [3.3, 3.1, ...]}
@@ -43,9 +43,11 @@ def summarize_csv(path, skip_warmup=20):
             for key, column in threads.items():
                 thread_times.setdefault(key, []).append(float(row[column]))
 
-    # Throw away the slow warm-up frames at the start of the capture.
+    # Throw away the warm-up frames at the start (level loading, shader compiling): they're
+    # slow for reasons no graphics setting controls.
     frame_times = frame_times[skip_warmup:]
     thread_times = {key: times[skip_warmup:] for key, times in thread_times.items()}
+    gpu_pass_times = {name: times[skip_warmup:] for name, times in gpu_pass_times.items()}
     if len(frame_times) < 10:
         raise ValueError(f"{path} has only {len(frame_times)} frames after warm-up - benchmark too short or failed?")
 
@@ -59,8 +61,7 @@ def summarize_csv(path, skip_warmup=20):
         "max_ms": round(sorted_times[-1], 2),
         "median_fps": round(1000 / median_ms, 1),
         "gpu_passes": {
-            name: round(statistics.median(times[skip_warmup:]), 2)
-            for name, times in gpu_pass_times.items()
+            name: round(statistics.median(times), 2) for name, times in gpu_pass_times.items()
         },
         "bottleneck": find_bottleneck(median_ms, thread_times),
         "timeline": _timeline(frame_times, thread_times),

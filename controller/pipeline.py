@@ -31,7 +31,8 @@ def load_config():
 
 
 # Kept the same for every run, so measurements stay comparable.
-RUN_DEFAULTS = {"resolution": [1920, 1080], "frames": 600, "timeout_seconds": 180}
+# 1200 frames: the first 60 are skipped as warm-up, the rest (10-40 s of play) are measured.
+RUN_DEFAULTS = {"resolution": [1920, 1080], "frames": 1200, "timeout_seconds": 300}
 EPIC_GAMES = Path("C:/Program Files/Epic Games")  # where the Epic launcher installs Unreal
 
 
@@ -84,7 +85,7 @@ def optimize(rounds, config, client=None, progress=print, measure=None, reports_
     measure  = optional; tests pass a fake so Unreal isn't needed. It gets
                (experiment, current_best) and returns a summary from summarize_csv().
     Returns the starting numbers, the best settings found, and what happened each round.
-    Nothing in the Unreal project is changed: the developer applies the result by hand.
+    Nothing in the Unreal project is changed here: the developer decides whether to apply "changes".
     """
     if not isinstance(rounds, int) or not 1 <= rounds <= 10:
         raise ValueError("Rounds must be a whole number from 1 to 10.")
@@ -139,6 +140,8 @@ def optimize(rounds, config, client=None, progress=print, measure=None, reports_
         "best": best_summary,
         "start_settings": baseline["settings"],
         "best_settings": best["settings"],
+        # Only the settings that differ from the start: what the report lists and Apply writes.
+        "changes": {s: v for s, v in best["settings"].items() if baseline["settings"].get(s) != v},
         "total": compare(start_summary, best_summary),
         "rounds": history,
         "stopped_early": stopped_early,
