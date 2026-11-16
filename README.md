@@ -6,7 +6,7 @@ An AI-assisted frame-rate optimizer for Unreal Engine 5, built for **DevHacks 20
 > measure, AI proposes, Unreal tests, keep what helps, report, and apply with undo. All 67 tests pass.
 
 **Core rule:** the AI suggests. Measurements decide. The developer approves.
-[![Watch the video](https://youtube.com)][(https://www.youtube.com/watch?v=97deAAmdtPg)]
+[![Watch the video][(https://www.youtube.com/watch?v=97deAAmdtPg)]
 
 
 ## What it does
