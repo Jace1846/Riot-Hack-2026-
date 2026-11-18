@@ -74,7 +74,7 @@ Run reports aren't committed to Git (`reports/run_*` is ignored). These numbers 
 Requirements: Windows, Python 3.12+, Unreal Engine 5, and an Anthropic API key (only for the AI step).
 
 ```
-git clone https://github.com/Jace1846/FrameForge--Riot-Hack-2026-.git FrameOptimizer
+git clone https://github.com/Jace1846/Riot-Hack-2026-.git
 cd FrameOptimizer
 py -m pip install -r requirements.txt
 py main.py
